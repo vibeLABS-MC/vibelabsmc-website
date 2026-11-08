@@ -6,6 +6,15 @@ shader players and developers, covering Iris and OptiFine.
 Want to fix or add a page? Read [CONTRIBUTING.md](CONTRIBUTING.md). Pages are Markdown files in
 `src/content/docs/`.
 
+## Branches
+
+- **`develop`** (this branch): the full docs site. Branch from it and open pull requests into it.
+  CI runs every check here but never deploys.
+- **`main`**: only the under-construction page, live on vibelabsmc.org. Launching means merging
+  `develop` into `main`.
+
+Using Claude Code? It reads [CLAUDE.md](CLAUDE.md) for the project rules.
+
 ## Stack
 
 - **SvelteKit 3 + Svelte 5**, prerendered to static HTML with `@sveltejs/adapter-static`.
@@ -44,8 +53,8 @@ tests/site/             checks against the built site in build/
 ## How it is hosted
 
 - **GitHub Pages** serves `build/`. `.github/workflows/pages.yml` runs formatting, type and unit
-  checks, builds, checks the built site, then deploys on every push to `main`. Pull requests run
-  the same checks without deploying.
+  checks, builds, checks the built site, then deploys, but only on pushes to `main`. Pushes to
+  `develop` and pull requests run the same checks without deploying.
 - **Cloudflare** sits in front for DNS, CDN caching, HTTPS, analytics and security headers.
 
 | Domain                                 | Behaviour                                                            |

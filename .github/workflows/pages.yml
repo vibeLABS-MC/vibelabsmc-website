@@ -1,8 +1,9 @@
-name: Test and deploy to GitHub Pages
+name: Test, and deploy from main
 
+# develop: every check, never deployed. main: checks, then deploy to GitHub Pages.
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
   workflow_dispatch:
 
@@ -29,15 +30,15 @@ jobs:
         run: npm run build
       - name: Check the built site
         run: npm run test:site
-      - if: github.event_name != 'pull_request'
+      - if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/configure-pages@v6
-      - if: github.event_name != 'pull_request'
+      - if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/upload-pages-artifact@v5
         with:
           path: build
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
     permissions:

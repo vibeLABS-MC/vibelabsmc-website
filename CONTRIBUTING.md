@@ -1,7 +1,8 @@
 # Writing for the vibeLABS docs
 
 Every page on [vibelabsmc.org](https://vibelabsmc.org) is a Markdown file in `src/content/docs/`.
-Fix a mistake, add a trick, or write a new page, then open a pull request. The build checks your
+Fix a mistake, add a trick, or write a new page, then open a pull request into the **`develop`**
+branch (not `main`, which only holds the live under-construction page). The build checks your
 page for you: a broken link, a missing heading anchor or a bad frontmatter field fails it with a
 message that names the file.
 

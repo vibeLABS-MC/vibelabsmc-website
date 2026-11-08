@@ -88,7 +88,7 @@ function order(fields: Fields, fail: (reason: string) => never): number {
 }
 
 function updated(fields: Fields, fail: (reason: string) => never): string {
-	const value = fields.updated instanceof Date ? isoDate(fields.updated) : String(fields.updated);
+	const value = String(fields.updated);
 	const date = new Date(`${value}T00:00:00Z`);
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || isoDate(date) !== value) {
 		fail('"updated" must be a real date written YYYY-MM-DD');

@@ -4,3 +4,5 @@ package-lock.json
 /.svelte-kit/
 /coverage/
 /concepts/
+/.metrics/
+/target/

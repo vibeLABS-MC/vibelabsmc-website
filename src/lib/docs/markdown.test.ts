@@ -84,6 +84,10 @@ describe('code blocks', () => {
 		);
 	});
 
+	it('rejects indented code, which cannot carry a language', () => {
+		expect(() => render('Text\n\n    float x;\n')).toThrow('code block needs a language');
+	});
+
 	it('requires a language so readers get highlighting and a label', () => {
 		expect(() => render('```\nplain\n```\n')).toThrow('code block needs a language');
 	});
@@ -129,5 +133,11 @@ describe('readingMinutes', () => {
 
 		expect(readingMinutes(`${prose}\n\n${code}`)).toBe(3);
 		expect(readingMinutes('Short.')).toBe(1);
+	});
+});
+
+describe('readingMinutes for an empty page', () => {
+	it('still reports one minute', () => {
+		expect(readingMinutes('')).toBe(1);
 	});
 });

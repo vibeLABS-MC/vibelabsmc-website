@@ -39,6 +39,10 @@ describe('search', () => {
 		expect(results.map((r) => r.href)).toEqual(['/docs/programs', '/docs/rendering-pipeline']);
 	});
 
+	it('keeps reading order between equally good matches', () => {
+		expect(search(entries, 'when').map((r) => r.title)).toEqual(['Rendering pipeline', 'Programs']);
+	});
+
 	it('needs every word of the query to match, in any case', () => {
 		expect(search(entries, 'IRIS shaderpack').map((r) => r.title)).toEqual(['Installing Iris']);
 		expect(search(entries, 'iris composite')).toEqual([]);

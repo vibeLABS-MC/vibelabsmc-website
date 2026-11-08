@@ -45,6 +45,11 @@ describe('parsePage', () => {
 
 	it.each([
 		['a file without frontmatter', 'Just text', 'must start with a --- frontmatter block'],
+		[
+			'frontmatter that is not a list of fields',
+			'---\njust words\n---\n',
+			'frontmatter must be a list of fields'
+		],
 		['a missing title', source(valid.replace('title: Shader stages\n', '')), '"title" is required'],
 		[
 			'an unknown section',

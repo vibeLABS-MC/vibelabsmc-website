@@ -13,3 +13,4 @@ Thumbs.db
 vite.config.ts.timestamp-*
 # design concepts and screenshots stay local
 /concepts
+/target

@@ -1,8 +1,0 @@
-package-lock.json
-/static/
-/build/
-/.svelte-kit/
-/coverage/
-/concepts/
-/.metrics/
-/target/

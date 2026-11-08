@@ -25,15 +25,15 @@ Opening paragraph that says who the page is for and what they will be able to do
 ## First topic
 ```
 
-| Field         | Required | Meaning                                                                  |
-| ------------- | -------- | ------------------------------------------------------------------------ |
-| `title`       | yes      | Page title, sentence case, no full stop.                                 |
-| `description` | yes      | One sentence, at most 200 characters. Shown under the title and in search. |
-| `section`     | yes      | `using`, `developing`, `reference` or `standards`.                       |
+| Field         | Required | Meaning                                                                              |
+| ------------- | -------- | ------------------------------------------------------------------------------------ |
+| `title`       | yes      | Page title, sentence case, no full stop.                                             |
+| `description` | yes      | One sentence, at most 200 characters. Shown under the title and in search.           |
+| `section`     | yes      | `using`, `developing`, `reference` or `standards`.                                   |
 | `order`       | yes      | Position in the section's sidebar, a whole number starting at 1. Unique per section. |
-| `updated`     | yes      | Date of the last meaningful edit, `YYYY-MM-DD`.                          |
-| `tag`         | no       | Short code label for reference cards, such as `gbuffers_*`.              |
-| `loaders`     | no       | Which loaders the page applies to: any of `iris`, `optifine`.            |
+| `updated`     | yes      | Date of the last meaningful edit, `YYYY-MM-DD`.                                      |
+| `tag`         | no       | Short code label for reference cards, such as `gbuffers_*`.                          |
+| `loaders`     | no       | Which loaders the page applies to: any of `iris`, `optifine`.                        |
 
 ## Writing style
 

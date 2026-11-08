@@ -11,3 +11,5 @@ export type Section = (typeof SECTIONS)[number];
 
 export const LOADERS = ['iris', 'optifine'] as const;
 export type Loader = (typeof LOADERS)[number];
+
+export const LOADER_NAMES: Record<Loader, string> = { iris: 'Iris', optifine: 'OptiFine' };

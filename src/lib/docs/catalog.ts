@@ -1,9 +1,9 @@
 import { ContentError, type DocPage } from './page';
 import { SECTIONS, type Section } from './sections';
 
-export interface NavSection extends Section {
+export type NavSection = Section & {
 	pages: DocPage[];
-}
+};
 
 /** Every page, in reading order: sidebar sections first, then `order` within a section. */
 export interface Catalog {

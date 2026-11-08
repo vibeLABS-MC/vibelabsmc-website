@@ -18,7 +18,13 @@ export default defineConfig({
 				directives: {
 					'default-src': ['self'],
 					'script-src': ['self', 'https://static.cloudflareinsights.com'],
-					'style-src': ['self'],
+					// SvelteKit's route announcer sets one inline style; allow exactly that one.
+					// tests/site/csp.test.ts fails if a SvelteKit update changes it.
+					'style-src': [
+						'self',
+						'unsafe-hashes',
+						'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo='
+					],
 					'img-src': ['self', 'data:'],
 					'font-src': ['self'],
 					'connect-src': ['self', 'https://cloudflareinsights.com'],
@@ -30,6 +36,8 @@ export default defineConfig({
 			}
 		})
 	],
+	// Fonts and images stay separate files: the CSP only allows fonts from this origin.
+	build: { assetsInlineLimit: 0 },
 	test: {
 		expect: { requireAssertions: true },
 		coverage: {

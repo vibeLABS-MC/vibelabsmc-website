@@ -1,0 +1,106 @@
+:root {
+  --ink: #f4f1ff;
+  --muted: rgba(236, 232, 255, 0.78);
+  --accent: #a99bff;
+  --night: #0b0820;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  background:
+    radial-gradient(60% 80% at 78% 35%, rgba(123, 108, 246, 0.45), transparent 70%),
+    radial-gradient(50% 60% at 15% 85%, rgba(199, 125, 255, 0.22), transparent 70%),
+    var(--night);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  overflow: hidden;
+}
+
+#bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  display: block;
+}
+
+.hero {
+  align-self: center;
+  padding: 0 clamp(1.5rem, 8vw, 9rem);
+  max-width: 62rem;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55);
+}
+
+.kicker {
+  margin: 0 0 0.6rem;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: clamp(0.8rem, 1.6vw, 1rem);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+}
+
+.wordmark {
+  margin: 0;
+  font-weight: 900;
+  font-size: clamp(3.2rem, 13vw, 9.5rem);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.wordmark span {
+  background: linear-gradient(100deg, #c9b8ff 0%, #a99bff 45%, #e07bf0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* text-shadow would show through the transparent gradient fill */
+  text-shadow: none;
+  filter: drop-shadow(0 2px 14px rgba(0, 0, 0, 0.5));
+}
+
+.tagline {
+  margin: 1.4rem 0 0;
+  max-width: 34rem;
+  font-size: clamp(1.05rem, 2.2vw, 1.4rem);
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.link {
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+
+.link:hover { color: #c9b8ff; }
+
+.note {
+  margin: 0.8rem 0 0;
+  color: var(--muted);
+  font-size: clamp(0.95rem, 1.8vw, 1.05rem);
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1.2rem clamp(1.5rem, 8vw, 9rem) 1.6rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.footer code {
+  font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

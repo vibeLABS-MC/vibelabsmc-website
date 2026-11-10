@@ -1,39 +1,33 @@
 import { describe, expect, it } from 'vitest';
+import { FAQ } from '../../src/lib/landing';
 import { files, read } from './build';
 
-const docPages = files.filter((f) => /^docs\/[a-z0-9-]+\.html$/.test(f));
+const home = read('index.html');
+const hrefs = [...home.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
 
-describe('the built docs', () => {
-	it('builds every Markdown page in src/content/docs', () => {
-		expect(docPages.length).toBeGreaterThanOrEqual(15);
-		expect(docPages).toContain('docs/rendering-pipeline.html');
+describe('the built landing page', () => {
+	it('has a title, a description, its canonical address and one heading', () => {
+		expect(home).toContain('<title>vibeLABS: Minecraft shaders, explained</title>');
+		expect(home).toMatch(/<meta name="description" content="[^"]{50,}"/);
+		expect(home).toContain('<link rel="canonical" href="https://vibelabsmc.org/"');
+		expect(home.match(/<h1[\s>]/g)).toHaveLength(1);
 	});
 
-	it.each(docPages)('%s has a title, description, canonical address and one heading', (page) => {
-		const html = read(page);
-		const slug = page.replace(/^docs\/|\.html$/g, '');
-
-		expect(html).toMatch(/<title>[^<]+ · vibeLABS docs<\/title>/);
-		expect(html).toMatch(/<meta name="description" content="[^"]{20,}"/);
-		expect(html).toContain(`<link rel="canonical" href="https://vibelabsmc.org/docs/${slug}"`);
-		expect(html.match(/<h1[\s>]/g)).toHaveLength(1);
+	it('sends readers to the docs site, never to the old /docs pages on this site', () => {
+		expect(hrefs.some((h) => h.startsWith('https://docs.vibelabsmc.org/'))).toBe(true);
+		expect(hrefs.filter((h) => h.startsWith('/docs'))).toEqual([]);
 	});
 
-	it('lists every page in the sitemap and the search index', () => {
-		const sitemap = read('sitemap.xml');
-		const index: { slug: string }[] = JSON.parse(read('search.json'));
-
-		for (const page of docPages) {
-			const slug = page.replace(/^docs\/|\.html$/g, '');
-			expect(sitemap).toContain(`<loc>https://vibelabsmc.org/docs/${slug}</loc>`);
-			expect(index.map((e) => e.slug)).toContain(slug);
+	it('keeps every FAQ answer in the HTML, so it is readable without JavaScript', () => {
+		for (const item of FAQ) {
+			const answer = item.answer.replaceAll('’', '&#8217;');
+			expect(home.includes(item.answer) || home.includes(answer)).toBe(true);
 		}
 	});
 
-	it('serves a not-found page and the files GitHub Pages needs', () => {
-		expect(files).toEqual(
-			expect.arrayContaining(['404.html', 'index.html', '.nojekyll', 'robots.txt'])
-		);
+	it('lists the one page in the sitemap and serves a not-found page', () => {
+		expect(read('sitemap.xml')).toContain('<loc>https://vibelabsmc.org/</loc>');
+		expect(files).toEqual(expect.arrayContaining(['404.html', '.nojekyll', 'robots.txt']));
 		expect(read('robots.txt')).toContain('Sitemap: https://vibelabsmc.org/sitemap.xml');
 	});
 });

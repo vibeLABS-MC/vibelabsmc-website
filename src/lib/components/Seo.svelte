@@ -4,7 +4,7 @@
 
 	let { title, description }: { title?: string; description: string } = $props();
 	const fullTitle = $derived(
-		title ? `${title} · ${SITE.title}` : `${SITE.title}: Minecraft shader documentation`
+		title ? `${title} · ${SITE.title}` : `${SITE.title}: Minecraft shaders, explained`
 	);
 	const url = $derived(new URL(page.url.pathname, SITE.url).href);
 </script>
@@ -13,9 +13,9 @@
 	<title>{fullTitle}</title>
 	<meta name="description" content={description} />
 	<link rel="canonical" href={url} />
-	<meta property="og:type" content={title ? 'article' : 'website'} />
+	<meta property="og:type" content="website" />
 	<meta property="og:site_name" content={SITE.name} />
-	<meta property="og:title" content={title ?? SITE.title} />
+	<meta property="og:title" content={title ?? fullTitle} />
 	<meta property="og:description" content={description} />
 	<meta property="og:url" content={url} />
 	<meta property="og:image" content="{SITE.url}/og-image.png" />

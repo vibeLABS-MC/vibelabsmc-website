@@ -1,22 +1,23 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import SearchButton from '#lib/components/SearchButton.svelte';
+	import Logo from '#lib/components/Logo.svelte';
+	import { docsUrl } from '#lib/site.ts';
 </script>
 
-<svelte:head><title>Page not found · vibeLABS docs</title></svelte:head>
+<svelte:head><title>Page not found · vibeLABS</title></svelte:head>
 
 <main id="main" class="lost">
-	<a class="home" href="/" aria-label="vibeLABS home"><span class="logo"></span></a>
+	<a class="home" href="/" aria-label="vibeLABS home"><Logo height={36} /></a>
 	<p class="code">{page.status}</p>
-	<h1>{page.status === 404 ? 'This page is not in the docs' : 'Something went wrong'}</h1>
+	<h1>{page.status === 404 ? 'This page does not exist' : 'Something went wrong'}</h1>
 	<p class="lede">
 		{page.status === 404
-			? 'The link may be old, or the page may have moved. Search for it, or start from the docs home.'
+			? 'Looking for a guide? The documentation now lives at docs.vibelabsmc.org.'
 			: page.error?.message}
 	</p>
-	<div class="search"><SearchButton label="Search the docs…" /></div>
 	<p class="links">
-		<a class="btn primary" href="/docs">Browse all docs</a><a class="btn secondary" href="/">Home</a
+		<a class="btn primary" href={docsUrl()}>Go to the docs</a><a class="btn secondary" href="/"
+			>Home</a
 		>
 	</p>
 </main>
@@ -29,8 +30,9 @@
 		text-align: center;
 	}
 	.home {
-		display: inline-block;
+		display: inline-flex;
 		color: var(--fg);
+		border-radius: 6px;
 	}
 	.code {
 		margin-top: 48px;
@@ -40,7 +42,7 @@
 	h1 {
 		font-size: 36px;
 		line-height: 44px;
-		letter-spacing: -0.7px;
+		letter-spacing: -0.02em;
 		font-weight: 600;
 		margin: 8px 0 12px;
 		text-wrap: balance;
@@ -50,14 +52,10 @@
 		font-size: 18px;
 		line-height: 28px;
 	}
-	.search {
-		margin: 32px auto 0;
-		max-width: 420px;
-	}
 	.links {
 		display: flex;
 		gap: 12px;
 		justify-content: center;
-		margin-top: 20px;
+		margin-top: 32px;
 	}
 </style>

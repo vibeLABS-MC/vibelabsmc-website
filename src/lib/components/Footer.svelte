@@ -1,16 +1,27 @@
 <script lang="ts">
 	import Logo from './Logo.svelte';
-	import { NAV } from '#lib/nav.ts';
-	import { docsUrl, SITE } from '#lib/site.ts';
+	import { DOCS_NAV } from '#lib/nav.ts';
+	import { SITE } from '#lib/site.ts';
 
 	const columns = [
-		{ title: 'Docs', links: NAV },
+		{
+			title: 'Marketplace',
+			links: [
+				{ label: 'Shader packs', href: '/marketplace/shaders' },
+				{ label: 'Texture packs', href: '/marketplace/texture-packs' },
+				{ label: 'Mods', href: '/marketplace/mods' },
+				{ label: 'Data packs', href: '/marketplace/data-packs' }
+			]
+		},
+		{ title: 'Docs', links: DOCS_NAV },
 		{
 			title: 'Project',
 			links: [
-				{ label: 'Docs on GitHub', href: SITE.docsRepo },
 				{ label: 'Website on GitHub', href: SITE.repo },
-				{ label: 'Glossary', href: docsUrl('/reference/glossary/') },
+				{ label: 'Docs on GitHub', href: SITE.docsRepo },
+				{ label: 'Content rules', href: '/legal/content-rules' },
+				{ label: 'Terms', href: '/legal/terms' },
+				{ label: 'Privacy', href: '/legal/privacy' },
 				...(SITE.discord ? [{ label: 'Discord', href: SITE.discord }] : [])
 			]
 		}

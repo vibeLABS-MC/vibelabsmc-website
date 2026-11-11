@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { Dialog } from 'bits-ui';
-	import { ArrowUpRight, Menu, X } from '@lucide/svelte';
+	import { Menu, X } from '@lucide/svelte';
 	import Logo from './Logo.svelte';
 	import type { NavLink } from '#lib/nav.ts';
-	import { docsUrl } from '#lib/site.ts';
 
-	let { links }: { links: NavLink[] } = $props();
+	let { links, signedIn }: { links: NavLink[]; signedIn: boolean } = $props();
 	let open = $state(false);
 </script>
 
@@ -30,9 +29,16 @@
 					</a>
 				{/each}
 			</nav>
-			<a class="btn primary sheet-cta" href={docsUrl()}
-				>Read the docs<ArrowUpRight aria-hidden="true" /></a
-			>
+			{#if signedIn}
+				<a class="btn secondary sheet-cta" href="/dashboard" onclick={() => (open = false)}
+					>Dashboard</a
+				>
+			{:else}
+				<div class="sheet-cta sheet-pair">
+					<a class="btn secondary" href="/login" onclick={() => (open = false)}>Sign in</a>
+					<a class="btn primary" href="/signup" onclick={() => (open = false)}>Create account</a>
+				</div>
+			{/if}
 		</Dialog.Content>
 	</Dialog.Portal>
 </Dialog.Root>

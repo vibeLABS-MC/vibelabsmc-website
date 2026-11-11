@@ -1,54 +1,44 @@
-# vibelabsmc-website
+# vibelabsmc.org
 
-Source for **[vibelabsmc.org](https://vibelabsmc.org)**, the vibeLABS landing site: a community for
-people who play with Minecraft shaders and people who write them.
+The vibeLABS website: the landing page, accounts, and the **marketplace** for Minecraft shader
+packs, texture packs, mods and data packs, with its moderation area. The documentation lives in
+[vibelabsmc-docs](https://github.com/vibeLABS-MC/vibelabsmc-docs) at docs.vibelabsmc.org.
 
-The documentation lives in its own repo,
-[vibelabsmc-docs](https://github.com/vibeLABS-MC/vibelabsmc-docs), at
-[docs.vibelabsmc.org](https://docs.vibelabsmc.org). To fix or add a guide, go there.
+- **Sign in** with GitHub, Discord, or email and password. Sessions are hashed server-side,
+  passwords use Argon2id and are checked against known breaches, two-factor (authenticator app +
+  recovery codes) is available to everyone and required for staff.
+- **Publish** projects with versions, files, screenshots, a Markdown description, tags, licence
+  and links. Every upload is streamed to disk, hashed, checked for its type and virus-scanned;
+  every new project is approved by a moderator.
+- **Find** projects with typo-tolerant search, filters with live counts, six sort orders, a
+  compatibility matrix and a "my setup" picker that marks what works with your game.
+- **Follow** projects (update feed + notifications), write **reviews**, save **collections**,
+  **report** problems.
+- **Moderate**: review queue, flagged files, reports, users (roles, suspensions), tags, Minecraft
+  versions, and an append-only audit log.
 
-## Branches
+## Run it
 
-- **`develop`** (this branch): the landing site. Branch from it and open pull requests into it.
-  CI runs every check here but never deploys.
-- **`main`**: only the under-construction page, live on vibelabsmc.org. Launching means merging
-  `develop` into `main`.
+You need [Bun](https://bun.sh) 1.4+ and Node 22.12+. No database to install: development uses
+PGlite (Postgres in WASM) inside the dev server.
 
-Using Claude Code? It reads [CLAUDE.md](CLAUDE.md) for the project rules.
-
-## Stack
-
-- **SvelteKit 3 + Svelte 5**, prerendered to static HTML with `@sveltejs/adapter-static`.
-- **[bits-ui](https://bits-ui.com)** for the interactive parts: tabs, FAQ accordion, mobile menu,
-  tooltips and the theme toggle.
-- **[Bun](https://bun.sh)** to install packages and run scripts (Vite itself runs on Node 22.12+).
-- Design tokens follow [Untitled UI React](https://github.com/untitleduico/react) (MIT).
-
-## Commands
-
-```bash
+```sh
+cp .env.example .env     # set APP_SECRET as the file explains
 bun install
-bun run dev          # local server with hot reload
-bun run test         # unit tests (Vitest)
-bun run check        # type-check Svelte and TypeScript
-bun run lint         # Prettier check
-bun run build        # prerender the site into build/
-bun run test:site    # check the built page (CSP, metadata, links into the docs)
+bun run seed:demo        # optional sample projects
+bun run dev              # http://localhost:5173
 ```
 
-## How it is hosted
+Sign-in with GitHub or Discord needs your own OAuth apps in `.env`; email sign-up works
+locally (emails land in `.data/outbox`).
 
-- **GitHub Pages** serves `build/`. `.github/workflows/pages.yml` runs formatting, type and unit
-  checks, builds, checks the built site, then deploys, but only on pushes to `main`.
-- **Cloudflare** sits in front for DNS, CDN caching, HTTPS, analytics and security headers.
+## Check it
 
-| Domain                                 | Behaviour                                                            |
-| -------------------------------------- | -------------------------------------------------------------------- |
-| `vibelabsmc.org`                       | Serves this site                                                     |
-| `docs.vibelabsmc.org`                  | The documentation (separate repo)                                    |
-| `www.vibelabsmc.org`                   | 301 redirect to `https://vibelabsmc.org` (Cloudflare Redirect Rule)  |
-| `vibelabsmc.com`, `www.vibelabsmc.com` | 301 redirect to `https://vibelabsmc.org`, keeping the path and query |
+```sh
+bun run lint && bun run check && bun run test && bun run build && bun run test:site
+```
 
-The Content Security Policy is written into every page by SvelteKit (see `csp` in
-`vite.config.ts`), with hashes for the inline scripts it generates. Do not add a second CSP header
-in Cloudflare: browsers enforce both, and the header cannot know the per-build script hashes.
+`test` runs the unit tests (each file against a fresh database); `test:site` runs the built server
+end to end with fake GitHub, Discord, breach-check, Mojang and ClamAV services.
+
+Read [CLAUDE.md](./CLAUDE.md) for the layout, the security rules and how changes are made.

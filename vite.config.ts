@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import adapter from '@sveltejs/adapter-static';
+import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
@@ -10,11 +10,13 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter({ fallback: '404.html' }),
-			// Every page is prerendered, so SvelteKit writes this policy into a <meta> tag and adds
-			// hashes for the inline scripts it generates. Cloudflare adds the remaining headers.
+			// A Node server (run by Bun on the VPS) behind nginx: accounts and uploads need one.
+			adapter: adapter({ precompress: true }),
+			// Server-rendered pages get a fresh nonce per response in the CSP header; anything
+			// prerendered gets hashes in a <meta> tag. Cloudflare/nginx add no CSP of their own,
+			// except `frame-ancestors`, which a <meta> tag cannot express.
 			csp: {
-				mode: 'hash',
+				mode: 'auto',
 				directives: {
 					'default-src': ['self'],
 					'script-src': ['self', 'https://static.cloudflareinsights.com'],
@@ -25,11 +27,14 @@ export default defineConfig({
 						'unsafe-hashes',
 						'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo='
 					],
-					'img-src': ['self', 'data:'],
+					// blob: shows a picked image before it is uploaded. Every other image (avatars,
+					// icons, gallery) is re-encoded and served from this origin.
+					'img-src': ['self', 'data:', 'blob:'],
 					'font-src': ['self'],
 					'connect-src': ['self', 'https://cloudflareinsights.com'],
+					'frame-ancestors': ['none'],
 					'base-uri': ['none'],
-					'form-action': ['none'],
+					'form-action': ['self'],
 					'object-src': ['none'],
 					'upgrade-insecure-requests': true
 				}
@@ -49,11 +54,27 @@ export default defineConfig({
 		projects: [
 			{
 				extends: './vite.config.ts',
-				test: { name: 'unit', environment: 'node', include: ['src/**/*.test.ts'] }
+				test: {
+					name: 'unit',
+					environment: 'node',
+					include: ['src/**/*.test.ts'],
+					// Each database test file starts its own in-memory Postgres; give a busy machine time.
+					hookTimeout: 60_000,
+					testTimeout: 30_000
+				}
 			},
 			{
 				extends: './vite.config.ts',
-				test: { name: 'site', environment: 'node', include: ['tests/site/**/*.test.ts'] }
+				test: {
+					name: 'site',
+					environment: 'node',
+					include: ['tests/site/**/*.test.ts'],
+					globalSetup: ['tests/site/server.ts'],
+					// One server and one database for the whole run, so files share it in order.
+					fileParallelism: false,
+					testTimeout: 30_000,
+					hookTimeout: 120_000
+				}
 			}
 		]
 	}

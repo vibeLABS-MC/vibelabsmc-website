@@ -6,3 +6,4 @@ bun.lock
 /concepts/
 /.metrics/
 /target/
+/drizzle/meta

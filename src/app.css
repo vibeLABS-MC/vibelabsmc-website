@@ -37,6 +37,10 @@
 	--ok-bg: light-dark(#ecfdf3, rgb(23 178 106 / 0.1));
 	--ok-line: light-dark(#abefc6, rgb(71 205 137 / 0.3));
 	--ok-fg: light-dark(#067647, #75e0a7);
+	--err-bg: light-dark(#fef3f2, rgb(240 68 56 / 0.1));
+	--err-line: light-dark(#fecdca, rgb(249 112 102 / 0.3));
+	--err-fg: light-dark(#b42318, #fda29b);
+	--star: light-dark(#f79009, #fdb022);
 	--code-bg: light-dark(#0c0e12, #13161b);
 	--code-line: #22262f;
 	--code-fg: #cecfd2;

@@ -1,130 +1,140 @@
 # CLAUDE.md
 
-Guidance for Claude Code (and humans) working on **vibelabsmc.org**, the vibeLABS landing site.
-The documentation is a separate project: repo `vibeLABS-MC/vibelabsmc-docs`, served at
-**docs.vibelabsmc.org**. This site introduces vibeLABS and sends readers there.
+Guidance for Claude Code (and humans) working on **vibelabsmc.org**: the vibeLABS landing page,
+accounts (GitHub, Discord, email), the **marketplace** (shader packs, texture packs, mods, data
+packs) and its moderation area. The documentation is a separate project: repo
+`vibeLABS-MC/vibelabsmc-docs`, served at **docs.vibelabsmc.org**; its header shows who is signed in
+here through `/api/session`.
 
 ## Branches and deployment
 
 | Branch    | What it holds                                  | What happens on push                      |
 | --------- | ---------------------------------------------- | ----------------------------------------- |
-| `develop` | The SvelteKit landing site. **Work here.**     | CI runs every check. Nothing is deployed. |
+| `develop` | The whole app. **Work here.**                  | CI runs every check. Nothing is deployed. |
 | `main`    | Only the under-construction page in `public/`. | Deploys to the live domain immediately.   |
 
 - Branch from `develop` and open pull requests **into `develop`**.
-- **Never push to `main`** unless the team has explicitly decided to change what the public sees.
-  GitHub only allows the `github-pages` environment to deploy from `main`.
-- Launch = a pull request from `develop` into `main`. `develop` already contains `main`'s
-  under-construction commit and its revert, so the merge is clean.
-- `develop.vibelabsmc.org` is a manual preview of `develop` on the team's server; it does not
-  update on push.
+- **Never push to `main`** unless the team has explicitly decided to launch.
+- `develop.vibelabsmc.org` runs `develop` for real on the team's server (`deploy/preview.sh`). It
+  is the live preview: real accounts, real uploads, real moderation, `noindex`.
+- Launching = moving vibelabsmc.org from GitHub Pages to the server (DNS + nginx + `ORIGIN`) and
+  merging `develop` into `main`. `.github/workflows/pages.yml` still deploys `main` to Pages: it
+  must change at launch, because the app needs a server.
 
 ## Commands
 
-Bun is the package manager: use `bun install`, `bun add`, `bun run`, never npm, pnpm or yarn, and
-commit `bun.lock`. Vite and SvelteKit run on Node 22.12+.
+Bun is the package manager (`bun install`, `bun add`, `bun run`; commit `bun.lock`). Vite,
+SvelteKit and the tests run on Node 22.12+; production runs the built server under Bun.
 
 ```bash
+cp .env.example .env   # then set APP_SECRET (the file explains how)
 bun install
-bun run dev          # http://localhost:5173 with hot reload
-bun run test         # unit tests (Vitest, project "unit")
-bun run check        # svelte-check: Svelte + TypeScript types
-bun run lint         # Prettier check (bun run format to fix)
-bun run build        # prerender everything into build/
-bun run test:site    # checks on build/ (run after build)
-bun run coverage     # unit tests + coverage/lcov.info
-bun run preview      # serve build/ locally
+bun run dev            # http://localhost:5173, database in .data/pglite (no install needed)
+bun run seed:demo      # optional: sample projects in the local database
+bun run test           # unit tests (Vitest, project "unit"), each file gets a fresh database
+bun run check          # svelte-check: Svelte + TypeScript types
+bun run lint           # Prettier check (bun run format to fix)
+bun run build          # the Node server in build/
+bun run test:site      # end-to-end over HTTP against build/ (run after build)
+bun run db:generate    # after changing src/lib/server/db/schema.ts: writes a migration
+bun run coverage       # unit tests + coverage/lcov.info
 ```
 
-Use `bun run test`, not `bun test`: plain `bun test` starts Bun's own runner, which does not read
-the Vitest config. Before you push: `bun run lint && bun run check && bun run test && bun run build
-&& bun run test:site`. CI (`.github/workflows/pages.yml`) runs exactly that.
+Use `bun run test`, not `bun test` (that starts Bun's own runner). Before you push:
+`bun run lint && bun run check && bun run test && bun run build && bun run test:site`. CI
+(`.github/workflows/pages.yml`) runs exactly that.
 
 ## Stack
 
-- **SvelteKit 3** with **Svelte 5 runes** and `@sveltejs/adapter-static`. Kit config lives in
-  `vite.config.ts` inside `sveltekit({ ... })`; there is no `svelte.config.js`.
-- Imports use package subpaths: `#lib/site.ts` maps to `src/lib/site.ts`. Keep the `.ts` extension.
-- **[bits-ui](https://bits-ui.com) 2** for interactive components (headless, accessible):
-  `Tabs` (the two paths), `Accordion` (FAQ), `Dialog` (mobile menu), `Tooltip` (icon buttons),
-  `Toggle` (theme). Style them with classes: bits-ui sets `data-state` and similar attributes to
-  target, for example `.segment[data-state='active']`.
-- Design tokens follow [Untitled UI React](https://github.com/untitleduico/react) (MIT), in
-  `src/app.css`, using `light-dark()`. Fonts: Inter via Fontsource. Icons: `@lucide/svelte`,
-  brand icons from `simple-icons`.
+- **SvelteKit 3** (Svelte 5 runes) with `@sveltejs/adapter-node`. Kit config lives in
+  `vite.config.ts` inside `sveltekit({ ... })`. SvelteKit 3 notes: hook types come from
+  `@sveltejs/kit/hooks`, param matchers live in `src/params.ts` (`defineParams`, browser-safe),
+  `redirect()` to another origin needs `{ external: [...] }`, `goto` keeps scroll by default.
+- **Postgres** through **Drizzle ORM** (`casing: 'snake_case'`). Production: Postgres 16 over the
+  Unix socket with peer authentication (no password). Development and site tests:
+  `DATABASE_URL=pglite:...` runs PGlite (Postgres in WASM) inside the server process and migrates
+  it on start. PGlite only loads `pg_trgm` under Node, and only with options as the first argument.
+- **bits-ui** 2 for interactive parts (Dialog, Popover, DropdownMenu, Tabs, Tooltip, Toggle,
+  RatingGroup). Untitled UI tokens in `src/app.css`; shared building blocks in
+  `src/lib/styles/ui.css`. Icons: `@lucide/svelte` (no brand icons: use `BrandIcon`).
+- Images: `sharp` re-encodes every upload to WebP. Files: streamed to disk, hashed, checked and
+  virus-scanned (`src/lib/server/uploads/`). Mail: `nodemailer` over SMTP, or JSON files in
+  `.data/outbox` in development.
 
 ## Code layout
 
 ```
-src/lib/site.ts         site facts and docsUrl(), the only way to link into the docs
-src/lib/landing.ts      the landing page's words: paths, frame passes, FAQ
-src/lib/nav.ts          header and footer links
-src/lib/theme.ts        theme choice logic (unit-tested)
-src/lib/brand/logo.ts   the wordmark as one SVG path (the docs site draws the same path)
-src/lib/components/     SiteHeader, MobileMenu, ThemeToggle, Hint, PathTabs, FrameStrip, Faq,
-                        Footer, Logo, Seo, BrandIcon
-src/routes/             the page, the error page and sitemap.xml
-tests/site/             checks against the built site in build/
-public/                 (main only) the under-construction page
+src/hooks.server.ts            runtime start-up, sessions, access rules, security headers
+src/lib/server/config.ts       every environment variable, validated in one place
+src/lib/server/auth/           sessions, OAuth (PKCE), passwords (Argon2id + breach check),
+                               TOTP + recovery codes, email tokens, users, access rules, guards
+src/lib/server/marketplace/    projects, versions + files, search, gallery, markdown, catalog
+src/lib/server/uploads/        streaming receive, zip inspection, ClamAV client, scan strategy
+src/lib/server/community/      follows, reviews, collections, reports, notifications
+src/lib/server/admin/          moderation decisions, file verdicts, users, audit reading
+src/lib/marketplace/           browser-safe: taxonomy, search URLs, versions, setup, matrix
+src/routes/(site)/             pages with the site header: landing, marketplace, dashboard,
+                               settings, admin, profiles, collections, legal
+src/routes/(auth)/             sign-in pages: login, signup, 2FA, confirm, onboarding, resets
+src/routes/auth/[provider]/    OAuth start and callback
+src/routes/api/                uploads, session (for the docs), markdown preview, v1 search
+tests/site/                    end-to-end tests with fake GitHub, Discord, HIBP, Mojang, ClamAV
+deploy/                        server set-up, deploy and secret scripts
 ```
 
-## Content rules
+## Security rules (read before changing anything in auth, uploads or headers)
 
-- Words live in `src/lib/landing.ts`. Keep every claim in step with the docs, and link to the page
-  that backs it up with `docsUrl('/section/page/')`. `docsUrl` throws on a relative path or a
-  missing trailing slash, so a bad link fails the build.
-- No invented stats, testimonials, team sizes or features. Plain English, British spelling,
-  sentence-case headings, no emoji or exclamation marks.
-
-## Security rules (the CSP is strict on purpose)
-
-The Content Security Policy is defined in `vite.config.ts` (`csp`, hash mode) and written into
-every page as a `<meta>` tag. Cloudflare only adds `frame-ancestors 'none'` plus HSTS, nosniff,
-referrer, permissions and frame headers. Never add a full CSP header in Cloudflare.
-
-- **No `style="..."` attributes and no inline scripts in the HTML.** `tests/site/csp.test.ts`
-  fails if one appears.
-- Styles that bits-ui sets **at runtime** (tooltip positions) are fine: Svelte writes them through
-  `element.style`, which the CSP allows. Styles it renders **on the server** are not.
-  `Accordion.Content` does this, so `Faq.svelte` renders the answer itself through the `child`
-  snippet and drops `style`. Do the same if another bits-ui part puts `style=` into
-  `build/index.html`.
-- Svelte transitions and `style:` directives emit inline styles; do not use them.
-- Fonts and images must stay files (`build.assetsInlineLimit: 0`).
-- New third-party resources need a CSP directive change in `vite.config.ts` and a matching update
-  in `tests/site/csp.test.ts`.
+- **CSP** is set per response by SvelteKit (`mode: 'auto'`, nonces). No `style="..."`
+  attributes and no inline scripts: `tests/site/csp.test.ts` fails if one appears. Svelte
+  transitions and `style:` directives emit inline styles; don't use them. bits-ui runtime styles
+  are fine; server-rendered ones are not (see `Faq.svelte`).
+- **Sessions**: only the SHA-256 of the cookie token is stored; cookie `__Host-vl_session`.
+  Sensitive actions need `sudoFailure()` (re-confirmed in the last 10 minutes).
+- **Access** to every area is decided in `src/lib/server/auth/access.ts` and enforced in the
+  hook; route code calls `requireUser` / `requireStaff` / `requireAdmin` / `editableProject` too.
+  Admin pages need staff role + two-factor passed in that session.
+- **Never trust user Markdown**: render with `renderMarkdown()` (server-side, allowlist, gallery
+  images only). Links in forms go through `linkProblem()`.
+- **Uploads** go through `/api/projects/[id]/uploads` only: streamed, size-capped, layout-checked,
+  ClamAV-scanned. Downloads go through `/download/...` (access check, counting, `sandbox` CSP,
+  attachment). Images are always re-encoded.
+- **Messages from query strings** are picked by code (`?error=cancelled`), never echoed.
+- Rate limits are listed in `src/lib/server/security/rate-limit.ts`. Every staff action and
+  security event goes to the append-only audit log (`audit()`).
 
 ## Design rules
 
-- Use the CSS variables (`--fg`, `--fg-3`, `--bg-subtle`, `--line`, `--accent`, ...); do not
+- Use the CSS variables (`--fg`, `--fg-3`, `--bg-subtle`, `--line`, `--accent`, ...); don't
   hard-code colours in components. Each colour is declared once with `light-dark()`.
-- bits-ui renders tooltips and the dialog at the end of `<body>`, outside every component, so
-  their styles (`.hint`, `.sheet`, `.sheet-overlay`) live in `src/app.css`.
-- Minimal and education-first. Check layouts at 375px and 1440px, in light and dark mode.
+- bits-ui renders tooltips, menus, popovers and dialogs at the end of `<body>`: their styles live
+  in `src/lib/styles/ui.css`.
+- Check layouts at 375px and 1440px, in light and dark mode.
 
 ## Engineering practice (ub-mode)
 
-The team follows [ub-mode](https://github.com/unclebob/ub-mode): write the failing test first,
-keep logic in pure `.ts` modules (the tools below do not read `.svelte`), keep every function under
-CRAP 10, remove duplication scoring 0.8 or more, kill surviving mutants, and make small commits
-whose messages say why, what and how it was proved. Current state: worst CRAP 4, no duplication,
-100% of mutants killed.
+Write the failing test first. Logic lives in `.ts` modules (the quality tools don't read
+`.svelte`): keep every function under CRAP 10, remove duplication scoring 0.8 or more, kill
+surviving mutants. Database code is tested against a real (PGlite) database in each test file
+(`tests/helpers/db.ts`). Small commits whose messages say why, what and how it was proved.
 
 ```bash
 bun run coverage
-python -m crapper --use-existing-coverage --threshold 10 src/lib/*.ts
+python -m crapper --use-existing-coverage --threshold 10 <src/lib .ts files>
 python -m dryer --threshold 0.8 src/lib src/routes tests
-python -m mutator --use-existing-coverage --test-command "node node_modules/vitest/vitest.mjs run --project unit" src/lib/site.ts src/lib/theme.ts
 ```
 
 ## Gotchas
 
-- `vite preview` serves `.svelte-kit/output`; rebuilding while it runs can crash it. Restart it.
-- SvelteKit's route announcer sets one inline style; its hash is allowed in `style-src`, and
-  `tests/site/csp.test.ts` fails if a SvelteKit update changes it. Update the hash when that happens.
 - `bun run test:site` needs a fresh `bun run build` first.
+- The route announcer's inline style hash is allowed in `style-src`; update it if a SvelteKit
+  upgrade changes it (the CSP test tells you).
+- `adapter-node` reads `BODY_SIZE_LIMIT`: production sets 110M (uploads are 100 MB); the hook
+  refuses bodies over 10 MB anywhere except the upload endpoint.
+- Changing `schema.ts`: run `bun run db:generate` and commit the new file in `drizzle/`. Never edit
+  an applied migration.
 
 ## Open items
 
 - `SITE.discord` in `src/lib/site.ts` is `null`; set the public invite to show Discord links.
-- The docs are still in preview (noindex) until their pages have had an expert review.
+- The legal pages under `src/routes/(site)/legal/` are plain-English starting points; have them
+  reviewed before launch.

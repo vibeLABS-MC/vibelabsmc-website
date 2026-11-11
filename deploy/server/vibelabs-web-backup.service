@@ -1,0 +1,15 @@
+[Unit]
+Description=Back up the vibeLABS website database and files
+
+[Service]
+Type=oneshot
+User=vibelabs-web
+Group=vibelabs-web
+ExecStart=/opt/vibelabs-web/bin/backup
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/backups/vibelabs-web
+ReadOnlyPaths=/var/lib/vibelabs-web
+UMask=0077

@@ -3,6 +3,7 @@
  * an in-memory PGlite one (tests/helpers/db.ts) and the app passes the real Postgres one.
  */
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate as migratePostgres } from 'drizzle-orm/postgres-js/migrator';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -36,6 +37,20 @@ export function connect(url: string, max = 10): { db: Database; close: () => Pro
 	return { db, close: () => client.end({ timeout: 5 }) };
 }
 
+/**
+ * Real Postgres, brought up to date first: migrations run on start, on one connection of
+ * their own, so a deploy is a single step and the app never runs against an older schema.
+ */
+async function openPostgres(url: string, max: number) {
+	const once = connect(url, 1);
+	try {
+		await migratePostgres(once.db as never, { migrationsFolder: join(process.cwd(), 'drizzle') });
+	} finally {
+		await once.close();
+	}
+	return connect(url, max);
+}
+
 /** `pglite:memory` or `pglite:./folder`: Postgres compiled to WASM, inside this process. */
 export const isPgliteUrl = (url: string): boolean => url.startsWith('pglite:');
 
@@ -48,7 +63,7 @@ export async function openDatabase(
 	url: string,
 	max = 10
 ): Promise<{ db: Database; close: () => Promise<void> }> {
-	if (!isPgliteUrl(url)) return connect(url, max);
+	if (!isPgliteUrl(url)) return openPostgres(url, max);
 	const load = (name: string) => import(/* @vite-ignore */ name);
 	const [{ PGlite }, { pg_trgm }, { drizzle: pgliteDrizzle }, { migrate }] = await Promise.all([
 		load('@electric-sql/pglite'),

@@ -1,0 +1,20 @@
+#!/bin/sh
+# set-env NAME: sets NAME in /etc/vibelabs-web/web.env to the value read from standard input
+# (never from the command line, so it doesn't land in shell history or `ps`), then restarts
+# the website. An empty value removes the variable. Run as root; used by deploy/set-secret.sh.
+set -eu
+NAME="${1:?usage: set-env NAME (value on stdin)}"
+case "$NAME" in
+  GITHUB_CLIENT_ID|GITHUB_CLIENT_SECRET|DISCORD_CLIENT_ID|DISCORD_CLIENT_SECRET|SMTP_URL|MAIL_FROM|ADMIN_GITHUB_IDS) ;;
+  *) echo "set-env: $NAME is not a variable this script manages" >&2; exit 2 ;;
+esac
+IFS= read -r VALUE || true
+FILE=/etc/vibelabs-web/web.env
+TMP=$(mktemp /etc/vibelabs-web/.web.env.XXXXXX)
+grep -v "^$NAME=" "$FILE" > "$TMP" || true
+if [ -n "$VALUE" ]; then printf '%s=%s\n' "$NAME" "$VALUE" >> "$TMP"; fi
+chown root:vibelabs-web "$TMP"
+chmod 0640 "$TMP"
+mv "$TMP" "$FILE"
+systemctl restart vibelabs-web
+echo "set-env: $NAME updated; vibelabs-web restarted"

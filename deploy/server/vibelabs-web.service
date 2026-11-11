@@ -1,0 +1,46 @@
+# The vibeLABS website (develop preview): the built SvelteKit server under Bun, on 127.0.0.1:3040.
+# nginx is the only thing that talks to it. Installed by deploy/provision.sh.
+[Unit]
+Description=vibeLABS website (develop.vibelabsmc.org)
+After=network-online.target postgresql.service clamav-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vibelabs-web
+Group=vibelabs-web
+WorkingDirectory=/opt/vibelabs-web/current
+EnvironmentFile=/etc/vibelabs-web/web.env
+ExecStart=/opt/vibelabs-web/bun/bun build/index.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+# It can write only its own data folder; everything else is read-only or hidden.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+RemoveIPC=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/vibelabs-web
+MemoryMax=1G
+TasksMax=256
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

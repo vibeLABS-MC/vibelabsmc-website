@@ -49,6 +49,17 @@ describe('RateLimiter', () => {
 		expect(limiter.hit('a', rule).remaining).toBe(1);
 	});
 
+	it('counts a key whose window ends right now as expired', () => {
+		const time = clock();
+		const limiter = new RateLimiter(time.now, 2);
+		limiter.hit('a', rule);
+		limiter.hit('old', { limit: 1, windowMs: 10 });
+		time.advance(10);
+
+		limiter.hit('c', rule);
+		expect(limiter.hit('a', rule).remaining).toBe(1);
+	});
+
 	it('drops the oldest live keys when every key is still live', () => {
 		const limiter = new RateLimiter(clock().now, 2);
 		limiter.hit('a', rule);

@@ -28,6 +28,9 @@ describe('base32', () => {
 	it('encodes like RFC 4648 (without padding) and decodes back', () => {
 		expect(base32Encode(Buffer.from('foobar'))).toBe('MZXW6YTBOI');
 		expect(base32Encode(Buffer.from('f'))).toBe('MY');
+		expect(base32Encode(Buffer.from('fo'))).toBe('MZXQ');
+		expect(base32Encode(Buffer.from('foo'))).toBe('MZXW6');
+		expect(base32Encode(Buffer.alloc(0))).toBe('');
 		expect(base32Decode('MZXW6YTBOI').toString()).toBe('foobar');
 		expect(base32Decode('mzxw 6ytb-oi==').toString()).toBe('foobar');
 		expect(() => base32Decode('MZ1')).toThrow('Not a base32 secret.');

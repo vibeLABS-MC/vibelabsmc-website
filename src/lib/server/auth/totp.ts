@@ -10,18 +10,10 @@ export const STEP_SECONDS = 30;
 const DIGITS = 6;
 
 export function base32Encode(bytes: Buffer): string {
-	let bits = 0;
-	let value = 0;
+	const bits = [...bytes].map((byte) => byte.toString(2).padStart(8, '0')).join('');
 	let out = '';
-	for (const byte of bytes) {
-		value = (value << 8) | byte;
-		bits += 8;
-		while (bits >= 5) {
-			out += BASE32[(value >>> (bits - 5)) & 31];
-			bits -= 5;
-		}
-	}
-	if (bits > 0) out += BASE32[(value << (5 - bits)) & 31];
+	for (let i = 0; i < bits.length; i += 5)
+		out += BASE32[parseInt(bits.slice(i, i + 5).padEnd(5, '0'), 2)];
 	return out;
 }
 

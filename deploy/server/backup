@@ -1,0 +1,10 @@
+#!/bin/sh
+# Nightly backup of the vibeLABS website: the database (pg_dump, peer authentication as the
+# app's own user) and the uploaded files and images. Keeps 14 days. Run by
+# vibelabs-web-backup.timer as the vibelabs-web user.
+set -eu
+DIR=/var/backups/vibelabs-web
+DAY=$(date +%F)
+pg_dump --format=custom --no-owner --dbname=vibelabs_web --host=/var/run/postgresql --file="$DIR/db-$DAY.dump"
+tar --create --gzip --file="$DIR/data-$DAY.tar.gz" --directory=/var/lib/vibelabs-web files images
+find "$DIR" -type f -mtime +14 -delete

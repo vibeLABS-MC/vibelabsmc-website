@@ -2,6 +2,7 @@
  * In-site notifications: new versions of followed projects, moderation decisions, review
  * replies, team invitations and report outcomes.
  */
+import { countOf } from '../db/query.ts';
 import { and, count, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
 import type { Database } from '../db/index.ts';
 import { notifications } from '../db/schema.ts';
@@ -30,13 +31,8 @@ export async function notify(
 	await db.insert(notifications).values(unique.map((userId) => ({ userId, kind, data })));
 }
 
-export async function unreadCount(db: Database, userId: string): Promise<number> {
-	const [row] = await db
-		.select({ n: count() })
-		.from(notifications)
-		.where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
-	return row?.n ?? 0;
-}
+export const unreadCount = (db: Database, userId: string): Promise<number> =>
+	countOf(db, notifications, and(eq(notifications.userId, userId), isNull(notifications.readAt)));
 
 export async function listNotifications(
 	db: Database,

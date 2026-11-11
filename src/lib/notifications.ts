@@ -16,69 +16,48 @@ function projectHref(data: Data, suffix = ''): string | null {
 	return isProjectType(type) && s(data.slug) ? projectPath(type, s(data.slug)) + suffix : null;
 }
 
+type Describe = (data: Data, name: string, message: string | null) => NotificationView;
+const view = (
+	text: string,
+	href: string | null,
+	tone: NotificationView['tone'],
+	detail: string | null = null
+): NotificationView => ({
+	text,
+	detail,
+	href,
+	tone
+});
+const dashboard = (data: Data, suffix = '') => `/dashboard/projects/${s(data.projectId)}${suffix}`;
+
+const KINDS: Record<string, Describe> = {
+	version_published: (d, name) =>
+		view(
+			`${name} released ${s(d.versionNumber)}`,
+			projectHref(d, `/version/${s(d.versionId)}`),
+			'info'
+		),
+	project_approved: (d, name) => view(`${name} is approved and public`, projectHref(d), 'ok'),
+	project_rejected: (d, name, message) =>
+		view(`${name} was not approved`, dashboard(d), 'error', message),
+	project_changes_requested: (d, name, message) =>
+		view(`Moderators asked for changes to ${name}`, dashboard(d), 'warn', message),
+	project_withheld: (d, name, message) =>
+		view(`${name} was withheld by moderators`, dashboard(d), 'error', message),
+	review_reply: (d, name) =>
+		view(`The team of ${name} replied to your review`, projectHref(d, '/reviews'), 'info'),
+	team_invite: (d, name) =>
+		view(`${s(d.from) || 'Someone'} invited you to the team of ${name}`, '/dashboard', 'info'),
+	report_resolved: (_d, _name, message) =>
+		view('A report you made was handled', null, 'ok', message),
+	file_flagged: (d, name, message) =>
+		view(`A file in ${name} was flagged`, dashboard(d, '/versions'), 'error', message)
+};
+
 export function describeNotification(kind: string, data: Data): NotificationView {
-	const name = s(data.projectName) || 'a project';
+	const describe = KINDS[kind];
 	const message = s(data.message) || null;
-	switch (kind) {
-		case 'version_published':
-			return {
-				text: `${name} released ${s(data.versionNumber)}`,
-				detail: null,
-				href: projectHref(data, `/version/${s(data.versionId)}`),
-				tone: 'info'
-			};
-		case 'project_approved':
-			return {
-				text: `${name} is approved and public`,
-				detail: null,
-				href: projectHref(data),
-				tone: 'ok'
-			};
-		case 'project_rejected':
-			return {
-				text: `${name} was not approved`,
-				detail: message,
-				href: `/dashboard/projects/${s(data.projectId)}`,
-				tone: 'error'
-			};
-		case 'project_changes_requested':
-			return {
-				text: `Moderators asked for changes to ${name}`,
-				detail: message,
-				href: `/dashboard/projects/${s(data.projectId)}`,
-				tone: 'warn'
-			};
-		case 'project_withheld':
-			return {
-				text: `${name} was withheld by moderators`,
-				detail: message,
-				href: `/dashboard/projects/${s(data.projectId)}`,
-				tone: 'error'
-			};
-		case 'review_reply':
-			return {
-				text: `The team of ${name} replied to your review`,
-				detail: null,
-				href: projectHref(data, '/reviews'),
-				tone: 'info'
-			};
-		case 'team_invite':
-			return {
-				text: `${s(data.from) || 'Someone'} invited you to the team of ${name}`,
-				detail: null,
-				href: '/dashboard',
-				tone: 'info'
-			};
-		case 'report_resolved':
-			return { text: 'A report you made was handled', detail: message, href: null, tone: 'ok' };
-		case 'file_flagged':
-			return {
-				text: `A file in ${name} was flagged`,
-				detail: message,
-				href: `/dashboard/projects/${s(data.projectId)}/versions`,
-				tone: 'error'
-			};
-		default:
-			return { text: 'Notification', detail: message, href: null, tone: 'info' };
-	}
+	return describe
+		? describe(data, s(data.projectName) || 'a project', message)
+		: view('Notification', null, 'info', message);
 }

@@ -2,6 +2,7 @@
  * Two-factor sign-in with an authenticator app. The secret is sealed with AES-256-GCM before
  * it is stored; recovery codes are stored as hashes and each works once.
  */
+import { countOf } from '../db/query.ts';
 import { and, count, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../db/index.ts';
 import { recoveryCodes, users } from '../db/schema.ts';
@@ -104,10 +105,5 @@ export async function disableTwoFactor(db: Database, userId: string): Promise<vo
 
 export const regenerateRecoveryCodes = storeRecoveryCodes;
 
-export async function remainingRecoveryCodes(db: Database, userId: string): Promise<number> {
-	const [row] = await db
-		.select({ n: count() })
-		.from(recoveryCodes)
-		.where(and(eq(recoveryCodes.userId, userId), isNull(recoveryCodes.usedAt)));
-	return row?.n ?? 0;
-}
+export const remainingRecoveryCodes = (db: Database, userId: string): Promise<number> =>
+	countOf(db, recoveryCodes, and(eq(recoveryCodes.userId, userId), isNull(recoveryCodes.usedAt)));

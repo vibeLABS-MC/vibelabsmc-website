@@ -1,4 +1,5 @@
 /** Follows, reviews, collections and reports: what players do with projects. */
+import { countOf, firstOrNull } from '../db/query.ts';
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.ts';
 import {
@@ -81,10 +82,8 @@ export async function saveReview(
 	return row!;
 }
 
-export async function getReview(db: Database, id: string): Promise<Review | null> {
-	const [row] = await db.select().from(reviews).where(eq(reviews.id, id));
-	return row ?? null;
-}
+export const getReview = (db: Database, id: string): Promise<Review | null> =>
+	firstOrNull(db.select().from(reviews).where(eq(reviews.id, id)));
 
 export async function deleteReview(db: Database, id: string): Promise<void> {
 	const [row] = await db
@@ -208,10 +207,8 @@ export async function deleteCollection(db: Database, id: string): Promise<void> 
 	await db.delete(collections).where(eq(collections.id, id));
 }
 
-export async function getCollection(db: Database, id: string): Promise<Collection | null> {
-	const [row] = await db.select().from(collections).where(eq(collections.id, id));
-	return row ?? null;
-}
+export const getCollection = (db: Database, id: string): Promise<Collection | null> =>
+	firstOrNull(db.select().from(collections).where(eq(collections.id, id)));
 
 /** Anyone may open public and unlisted collections; private ones only their owner (and staff). */
 export const canSeeCollection = (
@@ -347,10 +344,8 @@ export async function closeReport(
 	return row ?? null;
 }
 
-export async function countOpenReports(db: Database): Promise<number> {
-	const [row] = await db.select({ n: count() }).from(reports).where(eq(reports.status, 'open'));
-	return row?.n ?? 0;
-}
+export const countOpenReports = (db: Database): Promise<number> =>
+	countOf(db, reports, eq(reports.status, 'open'));
 
 export async function projectNames(db: Database, ids: string[]) {
 	if (!ids.length) return new Map<string, { name: string; slug: string; type: string }>();

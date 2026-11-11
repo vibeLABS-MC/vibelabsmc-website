@@ -55,29 +55,32 @@ export function scanStream(
 		});
 		socket.on('end', () => finish(parseReply(reply)));
 
-		const write = (bytes: Uint8Array) =>
-			new Promise<void>((done, fail) =>
-				socket.write(bytes, (cause) => (cause ? fail(cause) : done()))
-			);
-		socket.once('connect', async () => {
-			try {
-				await write(Buffer.from('zINSTREAM\0'));
-				for await (const piece of source) {
-					const buffer = Buffer.from(piece);
-					for (let offset = 0; offset < buffer.length; offset += CHUNK) {
-						const chunk = buffer.subarray(offset, offset + CHUNK);
-						const header = Buffer.alloc(4);
-						header.writeUInt32BE(chunk.length);
-						await write(Buffer.concat([header, chunk]));
-					}
-				}
-				await write(Buffer.alloc(4));
-			} catch (cause) {
-				finish({
-					status: 'error',
-					detail: `Sending to the virus scanner failed: ${(cause as Error).message}`
-				});
-			}
-		});
+		socket.once('connect', () =>
+			sendStream(socket, source).catch((cause: Error) =>
+				finish({ status: 'error', detail: `Sending to the virus scanner failed: ${cause.message}` })
+			)
+		);
 	});
+}
+
+/** `zINSTREAM\0`, then each piece as `<4-byte length><bytes>` chunks, then a zero length. */
+async function sendStream(
+	socket: Socket,
+	source: AsyncIterable<Buffer | Uint8Array>
+): Promise<void> {
+	const write = (bytes: Uint8Array) =>
+		new Promise<void>((done, fail) =>
+			socket.write(bytes, (cause) => (cause ? fail(cause) : done()))
+		);
+	await write(Buffer.from('zINSTREAM\0'));
+	for await (const piece of source) {
+		const buffer = Buffer.from(piece);
+		for (let offset = 0; offset < buffer.length; offset += CHUNK) {
+			const chunk = buffer.subarray(offset, offset + CHUNK);
+			const header = Buffer.alloc(4);
+			header.writeUInt32BE(chunk.length);
+			await write(Buffer.concat([header, chunk]));
+		}
+	}
+	await write(Buffer.alloc(4));
 }

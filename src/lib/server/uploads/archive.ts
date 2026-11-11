@@ -46,6 +46,35 @@ function checkEntry(entry: yauzl.Entry): void {
 		throw new ArchiveError('The archive expands far more than real files do (a zip bomb?).');
 }
 
+const toEntry = (raw: yauzl.Entry): ZipEntry => ({
+	name: raw.fileName,
+	size: raw.uncompressedSize,
+	compressedSize: raw.compressedSize,
+	directory: raw.fileName.endsWith('/')
+});
+
+const asArchiveError = (cause: Error): ArchiveError =>
+	cause instanceof ArchiveError
+		? cause
+		: new ArchiveError(`The archive is damaged: ${cause.message}`);
+
+/** Reads the central directory, handing each entry to `visit` (which may throw to stop). */
+function walk(zip: yauzl.ZipFile, visit: (entry: yauzl.Entry) => void): Promise<void> {
+	return new Promise<void>((resolve, reject) => {
+		zip.on('entry', (entry: yauzl.Entry) => {
+			try {
+				visit(entry);
+				zip.readEntry();
+			} catch (cause) {
+				reject(cause);
+			}
+		});
+		zip.on('end', () => resolve());
+		zip.on('error', (cause: Error) => reject(asArchiveError(cause)));
+		zip.readEntry();
+	});
+}
+
 /** Every entry, after checking the limits. yauzl itself refuses absolute and `../` paths. */
 export async function listEntries(path: string): Promise<ZipEntry[]> {
 	const zip = await open(path);
@@ -53,33 +82,12 @@ export async function listEntries(path: string): Promise<ZipEntry[]> {
 		if (zip.entryCount > LIMITS.entries) throw new ArchiveError('The archive has too many files.');
 		const entries: ZipEntry[] = [];
 		let total = 0;
-		await new Promise<void>((resolve, reject) => {
-			zip.on('entry', (entry: yauzl.Entry) => {
-				try {
-					checkEntry(entry);
-					total += entry.uncompressedSize;
-					if (total > LIMITS.uncompressed)
-						throw new ArchiveError('The archive unpacks to more than 4 GB.');
-					entries.push({
-						name: entry.fileName,
-						size: entry.uncompressedSize,
-						compressedSize: entry.compressedSize,
-						directory: entry.fileName.endsWith('/')
-					});
-					zip.readEntry();
-				} catch (cause) {
-					reject(cause);
-				}
-			});
-			zip.on('end', () => resolve());
-			zip.on('error', (cause: Error) =>
-				reject(
-					cause instanceof ArchiveError
-						? cause
-						: new ArchiveError(`The archive is damaged: ${cause.message}`)
-				)
-			);
-			zip.readEntry();
+		await walk(zip, (raw) => {
+			checkEntry(raw);
+			total += raw.uncompressedSize;
+			if (total > LIMITS.uncompressed)
+				throw new ArchiveError('The archive unpacks to more than 4 GB.');
+			entries.push(toEntry(raw));
 		});
 		return entries;
 	} finally {
@@ -95,22 +103,9 @@ export async function* readEntries(
 	const zip = await open(path);
 	try {
 		const queue: yauzl.Entry[] = [];
-		await new Promise<void>((resolve, reject) => {
-			zip.on('entry', (entry: yauzl.Entry) => {
-				queue.push(entry);
-				zip.readEntry();
-			});
-			zip.on('end', () => resolve());
-			zip.on('error', reject);
-			zip.readEntry();
-		});
+		await walk(zip, (raw) => queue.push(raw));
 		for (const raw of queue) {
-			const entry: ZipEntry = {
-				name: raw.fileName,
-				size: raw.uncompressedSize,
-				compressedSize: raw.compressedSize,
-				directory: raw.fileName.endsWith('/')
-			};
+			const entry = toEntry(raw);
 			if (entry.directory || !pick(entry)) continue;
 			const stream = await new Promise<Readable>((resolve, reject) =>
 				zip.openReadStream(raw, (cause, s) => (cause || !s ? reject(cause) : resolve(s)))

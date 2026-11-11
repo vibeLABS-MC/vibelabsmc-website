@@ -73,14 +73,38 @@ const list = (value: string | undefined) =>
 		.map((item) => item.trim())
 		.filter(Boolean);
 
+/** A variable's value, or the fallback when it is missing or empty. */
+const text = (env: Env, name: string, fallback: string): string => env[name] || fallback;
+const optional = (env: Env, name: string): string | null => env[name] || null;
+
+const ENDPOINT_VARIABLES: Record<keyof Endpoints, string> = {
+	githubAuth: 'GITHUB_AUTH_URL',
+	githubApi: 'GITHUB_API_URL',
+	discordAuth: 'DISCORD_AUTH_URL',
+	discordApi: 'DISCORD_API_URL',
+	githubAvatars: 'GITHUB_AVATAR_URL',
+	discordCdn: 'DISCORD_CDN_URL',
+	hibp: 'HIBP_URL',
+	mojangManifest: 'MOJANG_MANIFEST_URL'
+};
+
+function readEndpoints(env: Env): Endpoints {
+	const endpoints = Object.fromEntries(
+		Object.entries(ENDPOINT_VARIABLES).map(([key, name]) => [
+			key,
+			text(env, name, DEFAULT_ENDPOINTS[key as keyof Endpoints] ?? '')
+		])
+	) as unknown as Endpoints;
+	if (env.HIBP_URL === 'off') endpoints.hibp = null;
+	return endpoints;
+}
+
 function decodeSecret(value: string | undefined, problems: string[]): Buffer {
 	if (!value) {
 		problems.push('APP_SECRET is required (32+ random bytes, as hex or base64).');
 		return Buffer.alloc(0);
 	}
-	const bytes = /^[0-9a-f]+$/i.test(value)
-		? Buffer.from(value, 'hex')
-		: Buffer.from(value, 'base64');
+	const bytes = Buffer.from(value, /^[0-9a-f]+$/i.test(value) ? 'hex' : 'base64');
 	if (bytes.length < 32) problems.push('APP_SECRET must decode to at least 32 bytes.');
 	return bytes;
 }
@@ -111,6 +135,23 @@ function parseOrigin(value: string | undefined, problems: string[]): string {
 	}
 }
 
+function readDatabase(env: Env, problems: string[]): { databaseUrl: string; databasePool: number } {
+	const databaseUrl = text(env, 'DATABASE_URL', '');
+	if (!databaseUrl) problems.push('DATABASE_URL is required.');
+	return { databaseUrl, databasePool: Math.min(Math.max(Number(env.DATABASE_POOL) || 10, 1), 50) };
+}
+
+function readFileDelivery(
+	env: Env,
+	production: boolean,
+	problems: string[]
+): Config['fileDelivery'] {
+	const value = text(env, 'FILE_DELIVERY', production ? 'x-accel' : 'stream');
+	if (value !== 'x-accel' && value !== 'stream')
+		problems.push('FILE_DELIVERY must be "x-accel" or "stream".');
+	return value as Config['fileDelivery'];
+}
+
 function productionProblems(config: Omit<Config, 'endpoints'>): string[] {
 	const problems: string[] = [];
 	if (!config.origin.startsWith('https://')) problems.push('ORIGIN must use https in production.');
@@ -121,45 +162,24 @@ function productionProblems(config: Omit<Config, 'endpoints'>): string[] {
 export function parseConfig(env: Env): Config {
 	const problems: string[] = [];
 	const production = env.NODE_ENV === 'production';
-	const origin = parseOrigin(env.ORIGIN, problems);
-	const databaseUrl = env.DATABASE_URL ?? '';
-	if (!databaseUrl) problems.push('DATABASE_URL is required.');
-	const fileDelivery = env.FILE_DELIVERY ?? (production ? 'x-accel' : 'stream');
-	if (fileDelivery !== 'x-accel' && fileDelivery !== 'stream')
-		problems.push('FILE_DELIVERY must be "x-accel" or "stream".');
-
 	const config = {
-		origin,
+		origin: parseOrigin(env.ORIGIN, problems),
 		production,
-		databaseUrl,
-		databasePool: Math.min(Math.max(Number(env.DATABASE_POOL) || 10, 1), 50),
+		...readDatabase(env, problems),
 		secret: decodeSecret(env.APP_SECRET, problems),
 		github: oauthClient(env, 'GITHUB', problems),
 		discord: oauthClient(env, 'DISCORD', problems),
-		smtpUrl: env.SMTP_URL || null,
-		mailFrom: env.MAIL_FROM || 'vibeLABS <no-reply@vibelabsmc.org>',
-		mailOutbox: env.MAIL_OUTBOX || '.data/outbox',
+		smtpUrl: optional(env, 'SMTP_URL'),
+		mailFrom: text(env, 'MAIL_FROM', 'vibeLABS <no-reply@vibelabsmc.org>'),
+		mailOutbox: text(env, 'MAIL_OUTBOX', '.data/outbox'),
 		adminGithubIds: list(env.ADMIN_GITHUB_IDS),
-		storageDir: env.STORAGE_DIR || '.data/storage',
-		clamd: env.CLAMD || null,
-		fileDelivery: fileDelivery as Config['fileDelivery'],
-		accountOrigins: list(env.ACCOUNT_ORIGINS ?? 'https://docs.vibelabsmc.org'),
+		storageDir: text(env, 'STORAGE_DIR', '.data/storage'),
+		clamd: optional(env, 'CLAMD'),
+		fileDelivery: readFileDelivery(env, production, problems),
+		accountOrigins: list(text(env, 'ACCOUNT_ORIGINS', 'https://docs.vibelabsmc.org')),
 		noindex: env.NOINDEX === '1'
 	};
 	if (production) problems.push(...productionProblems(config));
 	if (problems.length) throw new Error(`Configuration problems:\n- ${problems.join('\n- ')}`);
-
-	return {
-		...config,
-		endpoints: {
-			githubAuth: env.GITHUB_AUTH_URL || DEFAULT_ENDPOINTS.githubAuth,
-			githubApi: env.GITHUB_API_URL || DEFAULT_ENDPOINTS.githubApi,
-			discordAuth: env.DISCORD_AUTH_URL || DEFAULT_ENDPOINTS.discordAuth,
-			discordApi: env.DISCORD_API_URL || DEFAULT_ENDPOINTS.discordApi,
-			githubAvatars: env.GITHUB_AVATAR_URL || DEFAULT_ENDPOINTS.githubAvatars,
-			discordCdn: env.DISCORD_CDN_URL || DEFAULT_ENDPOINTS.discordCdn,
-			hibp: env.HIBP_URL === 'off' ? null : env.HIBP_URL || DEFAULT_ENDPOINTS.hibp,
-			mojangManifest: env.MOJANG_MANIFEST_URL || DEFAULT_ENDPOINTS.mojangManifest
-		}
-	};
+	return { ...config, endpoints: readEndpoints(env) };
 }

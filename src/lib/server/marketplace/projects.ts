@@ -1,4 +1,5 @@
 /** Projects and their teams: creating, editing, inviting, submitting for review, deleting. */
+import { firstOrNull } from '../db/query.ts';
 import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.ts';
 import { isUniqueViolation } from '../db/errors.ts';
@@ -41,10 +42,8 @@ export async function createProject(
 	}
 }
 
-export async function getProject(db: Database, id: string): Promise<Project | null> {
-	const [row] = await db.select().from(projects).where(eq(projects.id, id));
-	return row ?? null;
-}
+export const getProject = (db: Database, id: string): Promise<Project | null> =>
+	firstOrNull(db.select().from(projects).where(eq(projects.id, id)));
 
 export async function getProjectBySlug(
 	db: Database,
@@ -229,27 +228,23 @@ export async function updateDetails(
 	}
 }
 
-export async function updateDescription(
+/** Changes some of a project's fields, stamping the update time. */
+async function updateProject(
 	db: Database,
 	projectId: string,
-	description: string
+	values: Partial<typeof projects.$inferInsert>
 ): Promise<void> {
 	await db
 		.update(projects)
-		.set({ description, updatedAt: new Date() })
+		.set({ ...values, updatedAt: new Date() })
 		.where(eq(projects.id, projectId));
 }
 
-export async function setIcon(
-	db: Database,
-	projectId: string,
-	iconKey: string | null
-): Promise<void> {
-	await db
-		.update(projects)
-		.set({ iconKey, updatedAt: new Date() })
-		.where(eq(projects.id, projectId));
-}
+export const updateDescription = (db: Database, projectId: string, description: string) =>
+	updateProject(db, projectId, { description });
+
+export const setIcon = (db: Database, projectId: string, iconKey: string | null) =>
+	updateProject(db, projectId, { iconKey });
 
 /** What still stops the project from being submitted (empty when it is ready). */
 export async function missingForReview(db: Database, project: Project): Promise<string[]> {

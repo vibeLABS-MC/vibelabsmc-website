@@ -39,27 +39,33 @@ function email(
 	return { to, subject, text: text(paragraphs, action), html: html(paragraphs, action) };
 }
 
-export const verifyEmail = (to: string, link: string) =>
-	email(
-		to,
-		'Confirm your email address',
-		[
+/** Emails that carry a one-time link: what they say and what the button says. */
+const LINK_EMAILS = {
+	verify: {
+		subject: 'Confirm your email address',
+		paragraphs: [
 			'Confirm this email address to finish setting up your vibeLABS account.',
 			'The link works once and expires in 30 minutes.'
 		],
-		{ label: 'Confirm email address', href: link }
-	);
-
-export const resetPassword = (to: string, link: string) =>
-	email(
-		to,
-		'Reset your vibeLABS password',
-		[
+		label: 'Confirm email address'
+	},
+	reset: {
+		subject: 'Reset your vibeLABS password',
+		paragraphs: [
 			'Someone asked to reset the password for the vibeLABS account that uses this email address.',
 			'The link works once and expires in 30 minutes. If you didn’t ask for it, ignore this email: your password stays the same.'
 		],
-		{ label: 'Choose a new password', href: link }
-	);
+		label: 'Choose a new password'
+	}
+};
+
+const linkEmail = (kind: keyof typeof LINK_EMAILS) => (to: string, link: string) => {
+	const { subject, paragraphs, label } = LINK_EMAILS[kind];
+	return email(to, subject, paragraphs, { label, href: link });
+};
+
+export const verifyEmail = linkEmail('verify');
+export const resetPassword = linkEmail('reset');
 
 /** Sent when someone signs up with an address that already has an account. */
 export const alreadyRegistered = (to: string, loginLink: string, resetLink: string) =>

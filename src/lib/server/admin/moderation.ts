@@ -3,8 +3,9 @@
  * scanner couldn't clear, managing users. Every action notifies whoever it affects and is
  * written to the audit log by the caller.
  */
-import { and, asc, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.ts';
+import { countOf } from '../db/query.ts';
 import {
 	auditLog,
 	files,
@@ -197,47 +198,34 @@ export async function listUsers(db: Database, search: string, limit = 50) {
 		.limit(limit);
 }
 
+/** Changes some of a user's fields, stamping the update time. */
+const updateUser = (db: Database, userId: string, values: Partial<typeof users.$inferInsert>) =>
+	db
+		.update(users)
+		.set({ ...values, updatedAt: new Date() })
+		.where(eq(users.id, userId));
+
 export async function setRole(db: Database, userId: string, role: Role): Promise<void> {
-	await db.update(users).set({ role, updatedAt: new Date() }).where(eq(users.id, userId));
+	await updateUser(db, userId, { role });
 	// A change of power ends every session, so new rights (or lost ones) apply at once.
 	await deleteUserSessions(db, userId);
 }
 
 export async function setBan(db: Database, userId: string, reason: string | null): Promise<void> {
-	await db
-		.update(users)
-		.set({ bannedAt: reason ? new Date() : null, banReason: reason, updatedAt: new Date() })
-		.where(eq(users.id, userId));
+	await updateUser(db, userId, { bannedAt: reason ? new Date() : null, banReason: reason });
 	if (reason) await deleteUserSessions(db, userId);
 }
 
 export async function overview(db: Database) {
-	const counted = async (query: Promise<{ n: number }[]>) => (await query)[0]?.n ?? 0;
 	const [queue, flagged, openReports, totalUsers, totalProjects, approved, liveSessions] =
 		await Promise.all([
-			counted(db.select({ n: count() }).from(projects).where(eq(projects.status, 'in_review'))),
-			counted(
-				db
-					.select({ n: count() })
-					.from(files)
-					.where(
-						or(
-							eq(files.scanStatus, 'review'),
-							eq(files.scanStatus, 'error'),
-							eq(files.scanStatus, 'pending')
-						)
-					)
-			),
-			counted(db.select({ n: count() }).from(reports).where(eq(reports.status, 'open'))),
-			counted(db.select({ n: count() }).from(users)),
-			counted(db.select({ n: count() }).from(projects)),
-			counted(db.select({ n: count() }).from(projects).where(eq(projects.status, 'approved'))),
-			counted(
-				db
-					.select({ n: count() })
-					.from(sessions)
-					.where(sql`${sessions.lastSeenAt} > now() - interval '1 day'`)
-			)
+			countOf(db, projects, eq(projects.status, 'in_review')),
+			countOf(db, files, inArray(files.scanStatus, ['review', 'error', 'pending'])),
+			countOf(db, reports, eq(reports.status, 'open')),
+			countOf(db, users),
+			countOf(db, projects),
+			countOf(db, projects, eq(projects.status, 'approved')),
+			countOf(db, sessions, sql`${sessions.lastSeenAt} > now() - interval '1 day'`)
 		]);
 	return { queue, flagged, openReports, totalUsers, totalProjects, approved, liveSessions };
 }

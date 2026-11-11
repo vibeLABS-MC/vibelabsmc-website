@@ -1,4 +1,5 @@
 /** Accounts and the ways to sign in to them. */
+import { firstOrNull } from '../db/query.ts';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.ts';
 import { isUniqueViolation } from '../db/errors.ts';
@@ -17,10 +18,8 @@ export async function findUserByEmail(db: Database, email: string): Promise<User
 	return user ?? null;
 }
 
-export async function findUserById(db: Database, id: string): Promise<User | null> {
-	const [user] = await db.select().from(users).where(eq(users.id, id));
-	return user ?? null;
-}
+export const findUserById = (db: Database, id: string): Promise<User | null> =>
+	firstOrNull(db.select().from(users).where(eq(users.id, id)));
 
 export async function isUsernameTaken(db: Database, username: string): Promise<boolean> {
 	const [row] = await db

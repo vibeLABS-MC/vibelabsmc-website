@@ -2,6 +2,8 @@
  * Versions of a project and their files: staging uploads, publishing a version from them,
  * listing, editing and withholding versions, and resolving downloads.
  */
+import { firstOrNull } from '../db/query.ts';
+import { RateLimiter } from '../security/rate-limit.ts';
 import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { rm } from 'node:fs/promises';
 import type { Database } from '../db/index.ts';
@@ -91,11 +93,11 @@ export interface NewVersion {
 export type PublishProblem = 'no-files' | 'infected' | 'duplicate-number' | 'foreign-file';
 
 /** Publishes a version from staged uploads; the files move into permanent storage. */
-export async function publishVersion(
+/** The staged files a version may be published from, or why it can't be. */
+async function publishable(
 	db: Database,
-	storageDir: string,
 	input: NewVersion
-): Promise<{ version: Version } | { problem: PublishProblem }> {
+): Promise<{ staged: Staged[] } | { problem: PublishProblem }> {
 	const staged = input.stagedIds.length
 		? await db
 				.select()
@@ -117,7 +119,17 @@ export async function publishVersion(
 		.where(
 			and(eq(versions.projectId, input.project.id), eq(versions.versionNumber, input.versionNumber))
 		);
-	if (taken) return { problem: 'duplicate-number' };
+	return taken ? { problem: 'duplicate-number' } : { staged };
+}
+
+export async function publishVersion(
+	db: Database,
+	storageDir: string,
+	input: NewVersion
+): Promise<{ version: Version } | { problem: PublishProblem }> {
+	const checked = await publishable(db, input);
+	if ('problem' in checked) return checked;
+	const { staged } = checked;
 
 	for (const s of staged)
 		await keep(storageDir, { path: stagedPath(storageDir, s.id), sha512: s.sha512 });
@@ -236,10 +248,8 @@ export async function listVersions(
 	}));
 }
 
-export async function getVersion(db: Database, id: string): Promise<Version | null> {
-	const [row] = await db.select().from(versions).where(eq(versions.id, id));
-	return row ?? null;
-}
+export const getVersion = (db: Database, id: string): Promise<Version | null> =>
+	firstOrNull(db.select().from(versions).where(eq(versions.id, id)));
 
 export async function updateVersion(
 	db: Database,
@@ -309,23 +319,16 @@ export async function resolveDownload(
 	return insider && row.file.scanStatus !== 'error' ? row : null;
 }
 
-/** Counts a download once per visitor per file per day; returns whether it counted. */
+/** Counts a download once per visitor per file per day: a rate limit of one, reused. */
 export class DownloadCounter {
-	private readonly seen = new Map<string, number>();
+	private readonly limiter: RateLimiter;
 
-	constructor(
-		private readonly now: () => number = Date.now,
-		private readonly maxKeys = 200_000
-	) {}
+	constructor(now: () => number = Date.now, maxKeys = 200_000) {
+		this.limiter = new RateLimiter(now, maxKeys);
+	}
 
 	shouldCount(visitor: string, fileId: string): boolean {
-		const key = `${visitor}:${fileId}`;
-		const time = this.now();
-		const last = this.seen.get(key);
-		if (last !== undefined && time - last < 86_400_000) return false;
-		if (this.seen.size >= this.maxKeys) this.seen.clear();
-		this.seen.set(key, time);
-		return true;
+		return this.limiter.hit(`${visitor}:${fileId}`, { limit: 1, windowMs: 86_400_000 }).ok;
 	}
 }
 

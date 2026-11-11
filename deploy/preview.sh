@@ -56,6 +56,10 @@ if [ "$units_changed" = yes ]; then
 fi
 rm -rf /tmp/vibelabs-web-deploy
 
+# Stored files must be readable by nginx (group www-data); see deploy/provision.sh.
+install -d -o vibelabs-web -g www-data -m 2750 /var/lib/vibelabs-web/tmp
+find /var/lib/vibelabs-web/files ! -group www-data -exec chgrp www-data {} +
+
 ln -sfn "$DIR" /opt/vibelabs-web/current.new
 mv -T /opt/vibelabs-web/current.new /opt/vibelabs-web/current
 systemctl enable vibelabs-web >/dev/null 2>&1

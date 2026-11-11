@@ -24,9 +24,14 @@ id vibelabs-web >/dev/null 2>&1 ||
 	useradd --system --user-group --home-dir /var/lib/vibelabs-web --shell /usr/sbin/nologin vibelabs-web
 
 install -d -o root -g root -m 0755 /opt/vibelabs-web /opt/vibelabs-web/releases /opt/vibelabs-web/bin /opt/vibelabs-web/bun
-# nginx (www-data) reads files and images straight from disk; new files inherit the group.
-install -d -o vibelabs-web -g www-data -m 2750 /var/lib/vibelabs-web /var/lib/vibelabs-web/files /var/lib/vibelabs-web/images
-install -d -o vibelabs-web -g vibelabs-web -m 0700 /var/lib/vibelabs-web/tmp /var/backups/vibelabs-web
+# nginx (group www-data) reads files/ and images/ straight from disk; new files inherit the
+# group. Uploads are written to tmp/ and then renamed into files/, and a rename keeps the file's
+# group, so tmp/ must give www-data too. (nginx has no route into tmp/, so half-finished uploads
+# still can't be fetched.)
+for dir in /var/lib/vibelabs-web /var/lib/vibelabs-web/files /var/lib/vibelabs-web/images /var/lib/vibelabs-web/tmp; do
+	install -d -o vibelabs-web -g www-data -m 2750 "$dir"
+done
+install -d -o vibelabs-web -g vibelabs-web -m 0700 /var/backups/vibelabs-web
 install -d -o root -g vibelabs-web -m 0750 /etc/vibelabs-web
 
 if ! /opt/vibelabs-web/bun/bun --version 2>/dev/null | grep -qx "$BUN_VERSION"; then

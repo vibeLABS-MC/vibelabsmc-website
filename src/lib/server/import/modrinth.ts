@@ -103,7 +103,7 @@ export interface ModrinthVersion {
 
 export interface ModrinthMember {
 	role: string;
-	ordering?: number;
+	ordering: number;
 	user: {
 		username: string;
 		bio: string | null;
@@ -140,7 +140,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
 export const categoriesOf = (
 	project: Pick<ModrinthProject, 'categories' | 'additional_categories'>
 ): string[] =>
-	[...project.categories, ...project.additional_categories].map((c) => CATEGORY_ALIASES[c] ?? c);
+	[...project.categories, ...project.additional_categories].map((c) => CATEGORY_ALIASES[c] || c);
 
 /** Only loaders this project type has here (Modrinth lists e.g. "minecraft" for texture packs). */
 export const loadersOf = (type: ProjectType, loaders: string[]): Loader[] =>
@@ -177,9 +177,8 @@ export const SUMMARY_MAX = 160;
 export function summaryOf(text: string): string {
 	const clean = text.replace(/\s+/g, ' ').trim();
 	if (clean.length <= SUMMARY_MAX) return clean;
-	const cut = clean.slice(0, SUMMARY_MAX - 1);
-	const space = cut.lastIndexOf(' ');
-	return `${space > 0 ? cut.slice(0, space) : cut}…`;
+	// Drop the last, possibly partial, word (a single long word is cut where it is).
+	return `${clean.slice(0, SUMMARY_MAX - 1).replace(/ \S*$/, '')}…`;
 }
 
 /** The newest `limit` versions (or all), oldest first, so they are published in order. */
@@ -191,7 +190,7 @@ export function newestVersions(list: ModrinthVersion[], limit: number | 'all'): 
 /** The team member called "Owner", or else the first one listed. */
 export const ownerOf = (members: ModrinthMember[]): ModrinthMember | null =>
 	members.find((m) => m.role === 'Owner') ??
-	[...members].sort((a, b) => (a.ordering ?? 0) - (b.ordering ?? 0))[0] ??
+	[...members].sort((a, b) => a.ordering - b.ordering)[0] ??
 	null;
 
 const ALLOWED_HOSTS = new Set([
@@ -240,7 +239,8 @@ export interface ImportContext {
 	clamd: string | null;
 	/** `fetch`, or a fake one in tests. */
 	http: typeof fetch;
-	api?: string;
+	/** MODRINTH_API, or a fake one in tests. */
+	api: string;
 	/** Progress lines for the person running the import. */
 	log?: (line: string) => void;
 }
@@ -260,7 +260,13 @@ export interface ImportReport {
 	created: boolean;
 	owner: string;
 	versions: { number: string; result: 'imported' | 'present' | 'failed'; detail?: string }[];
-	images: { imported: number; failed: string[] };
+	images: ImageTally;
+}
+
+/** Pictures copied so far, and the ones that couldn’t be (with why). */
+export interface ImageTally {
+	imported: number;
+	failed: string[];
 }
 
 const SECOND = 1000;
@@ -276,14 +282,14 @@ async function get(ctx: ImportContext, url: string, timeout: number): Promise<Re
 }
 
 async function getJson<T>(ctx: ImportContext, path: string): Promise<T> {
-	const response = await get(ctx, `${ctx.api ?? MODRINTH_API}${path}`, 30 * SECOND);
+	const response = await get(ctx, `${ctx.api}${path}`, 30 * SECOND);
 	return (await response.json()) as T;
 }
 
-/** One picture, re-encoded and stored; null (noted in the report) if it can’t be had. */
+/** One picture, re-encoded and stored; null (noted in the tally) if it can’t be had. */
 async function fetchImage(
 	ctx: ImportContext,
-	report: ImportReport,
+	images: ImageTally,
 	url: string | null | undefined,
 	kind: ImageKind
 ): Promise<StoredImage | null> {
@@ -291,17 +297,17 @@ async function fetchImage(
 	try {
 		if (!isAllowedSource(url)) throw new ImportError('not on Modrinth or GitHub');
 		const response = await get(ctx, url, 30 * SECOND);
-		if (Number(response.headers.get('content-length') ?? 0) > IMAGE_MAX_BYTES)
+		if (Number(response.headers.get('content-length')) > IMAGE_MAX_BYTES)
 			throw new ImportError('too large');
 		const stored = await storeImage(
 			ctx.storageDir,
 			Buffer.from(await response.arrayBuffer()),
 			kind
 		);
-		report.images.imported++;
+		images.imported++;
 		return stored;
 	} catch (cause) {
-		report.images.failed.push(`${url} (${(cause as Error).message})`);
+		images.failed.push(`${url} (${(cause as Error).message})`);
 		return null;
 	}
 }
@@ -309,12 +315,12 @@ async function fetchImage(
 /** The description with its pictures copied here (others become links when shown). */
 async function withLocalImages(
 	ctx: ImportContext,
-	report: ImportReport,
+	images: ImageTally,
 	markdown: string
 ): Promise<string> {
 	const local = new Map<string, string>();
 	for (const url of imageUrlsIn(markdown).filter(isAllowedSource)) {
-		const stored = await fetchImage(ctx, report, url, 'gallery');
+		const stored = await fetchImage(ctx, images, url, 'gallery');
 		if (stored) local.set(url, imageUrl(stored.key));
 	}
 	return withImages(markdown, local);
@@ -332,7 +338,7 @@ async function userNamed(db: Database, username: string) {
 /** An account for the Modrinth owner. It has no sign-in method until someone links one. */
 async function accountFor(
 	ctx: ImportContext,
-	report: ImportReport,
+	images: ImageTally,
 	members: ModrinthMember[]
 ): Promise<{ id: string; username: string }> {
 	const member = ownerOf(members);
@@ -346,33 +352,33 @@ async function accountFor(
 		);
 	const avatar = await fetchImage(
 		ctx,
-		report,
-		member.user.raw_avatar_url ?? member.user.avatar_url,
+		images,
+		member.user.raw_avatar_url || member.user.avatar_url,
 		'avatar'
 	);
 	await ctx.db.insert(users).values({
 		id: newId(),
 		username,
 		displayName: username,
-		bio: (member.user.bio ?? '').replace(/\r\n?/g, '\n').slice(0, 500),
-		avatarKey: avatar?.key ?? null
+		bio: (member.user.bio || '').replace(/\r\n?/g, '\n').slice(0, 500),
+		avatarKey: avatar?.key
 	});
 	return userNamed(ctx.db, username);
 }
 
 async function importGallery(
 	ctx: ImportContext,
-	report: ImportReport,
+	images: ImageTally,
 	projectId: string,
-	images: ModrinthImage[]
+	shots: ModrinthImage[]
 ): Promise<void> {
-	for (const image of [...images].sort((a, b) => a.ordering - b.ordering)) {
-		const stored = await fetchImage(ctx, report, image.raw_url ?? image.url, 'gallery');
-		const row = stored && (await addImage(ctx.db, projectId, stored, image.title ?? ''));
+	for (const image of [...shots].sort((a, b) => a.ordering - b.ordering)) {
+		const stored = await fetchImage(ctx, images, image.raw_url || image.url, 'gallery');
+		const row = stored && (await addImage(ctx.db, projectId, stored));
 		if (row)
 			await updateImage(ctx.db, projectId, row.id, {
-				title: image.title ?? '',
-				description: image.description ?? '',
+				title: image.title || '',
+				description: image.description || '',
 				featured: image.featured || row.featured
 			});
 	}
@@ -381,7 +387,7 @@ async function importGallery(
 /** A new project with Modrinth's page, icon and gallery; a draft until it has versions. */
 async function createFrom(
 	ctx: ImportContext,
-	report: ImportReport,
+	images: ImageTally,
 	source: ModrinthProject,
 	type: ProjectType,
 	ownerId: string
@@ -394,28 +400,29 @@ async function createFrom(
 		summary: summaryOf(source.description)
 	});
 	if ('problem' in made) throw new ImportError(`The address ${slugOf(source)} is taken.`);
-	const icon = await fetchImage(ctx, report, source.raw_icon_url ?? source.icon_url, 'icon');
+	const icon = await fetchImage(ctx, images, source.raw_icon_url || source.icon_url, 'icon');
 	await ctx.db
 		.update(projects)
 		.set({
-			description: await withLocalImages(ctx, report, source.body),
-			iconKey: icon?.key ?? null,
+			description: await withLocalImages(ctx, images, source.body),
+			iconKey: icon?.key,
 			categories: await validCategories(ctx.db, type, categoriesOf(source)),
 			...licenseOf(source.license),
 			...linksOf(source)
 		})
 		.where(eq(projects.id, made.project.id));
-	await importGallery(ctx, report, made.project.id, source.gallery);
+	await importGallery(ctx, images, made.project.id, source.gallery);
 	return made.project;
 }
 
 async function ownerOfProject(db: Database, projectId: string) {
 	const [owner] = await db
-		.select({ username: users.username })
+		.select({ id: users.id, username: users.username })
 		.from(projectMembers)
 		.innerJoin(users, eq(users.id, projectMembers.userId))
 		.where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.role, 'owner')));
-	return userNamed(db, owner?.username ?? '');
+	if (!owner?.username) throw new ImportError('The project here has no owner to add versions as.');
+	return { id: owner.id, username: owner.username };
 }
 
 /**
@@ -435,7 +442,7 @@ async function stageDownload(
 	const response = await get(ctx, file.url, 600 * SECOND);
 	const received = await receive(response.body!, ctx.storageDir);
 	if (received.sha512 !== file.hashes.sha512 || received.sha1 !== file.hashes.sha1) {
-		await rm(received.path, { force: true });
+		await rm(received.path);
 		throw new ImportError(`${filename} doesn’t match the hashes Modrinth lists.`);
 	}
 	const inspection = await inspectUpload(received.path, project.type, ctx.clamd);
@@ -476,7 +483,7 @@ async function importVersion(
 	project: Project,
 	ownerId: string,
 	source: ModrinthVersion,
-	keepDownloads: boolean
+	options: ImportOptions
 ): Promise<void> {
 	const gameVersions = await validGameVersions(ctx.db, source.game_versions);
 	if (!gameVersions.length) throw new ImportError('None of its Minecraft versions are known here.');
@@ -486,7 +493,7 @@ async function importVersion(
 		authorId: ownerId,
 		versionNumber: source.version_number,
 		name: source.name || source.version_number,
-		changelog: source.changelog ?? '',
+		changelog: source.changelog || '',
 		channel: source.version_type,
 		gameVersions,
 		loaders: loadersOf(project.type, source.loaders),
@@ -500,7 +507,7 @@ async function importVersion(
 		.update(versions)
 		.set({
 			publishedAt: new Date(source.date_published),
-			...(keepDownloads ? { downloads: source.downloads } : {})
+			...(options.keepDownloads ? { downloads: source.downloads } : {})
 		})
 		.where(eq(versions.id, published.version.id));
 }
@@ -530,7 +537,7 @@ async function importVersions(
 		}
 		ctx.log?.(`version ${number}…`);
 		try {
-			await importVersion(ctx, project, ownerId, version, options.keepDownloads ?? false);
+			await importVersion(ctx, project, ownerId, version, options);
 			report.versions.push({ number, result: 'imported' });
 		} catch (cause) {
 			report.versions.push({ number, result: 'failed', detail: (cause as Error).message });
@@ -569,14 +576,14 @@ async function finish(
 /** The project's owner: its current one, the account asked for, or a new one for the Modrinth owner. */
 async function chooseOwner(
 	ctx: ImportContext,
-	report: ImportReport,
+	images: ImageTally,
 	existing: Project | null,
 	options: ImportOptions,
 	base: string
 ): Promise<{ id: string; username: string }> {
 	if (existing) return ownerOfProject(ctx.db, existing.id);
 	if (options.owner) return userNamed(ctx.db, options.owner);
-	return accountFor(ctx, report, await getJson<ModrinthMember[]>(ctx, `${base}/members`));
+	return accountFor(ctx, images, await getJson<ModrinthMember[]>(ctx, `${base}/members`));
 }
 
 export async function importFromModrinth(
@@ -587,26 +594,21 @@ export async function importFromModrinth(
 	const base = `/project/${encodeURIComponent(slug)}`;
 	const source = await getJson<ModrinthProject>(ctx, base);
 	const type = projectTypeOf(source);
-	const report: ImportReport = {
-		projectId: '',
-		path: '',
-		created: false,
-		owner: '',
-		versions: [],
-		images: { imported: 0, failed: [] }
-	};
+	const images: ImageTally = { imported: 0, failed: [] };
 	const existing = await getProjectBySlug(ctx.db, type, slugOf(source));
-	const owner = await chooseOwner(ctx, report, existing, options, base);
+	const owner = await chooseOwner(ctx, images, existing, options, base);
 	ctx.log?.(
 		existing ? `updating ${source.title}…` : `creating ${source.title} for ${owner.username}…`
 	);
-	const project = existing ?? (await createFrom(ctx, report, source, type, owner.id));
-	Object.assign(report, {
+	const project = existing || (await createFrom(ctx, images, source, type, owner.id));
+	const report: ImportReport = {
 		projectId: project.id,
 		path: projectPath(type, project.slug),
 		created: !existing,
-		owner: owner.username
-	});
+		owner: owner.username,
+		versions: [],
+		images
+	};
 	await importVersions(ctx, report, project, owner.id, options, base);
 	await finish(ctx, report, source, options);
 	return report;

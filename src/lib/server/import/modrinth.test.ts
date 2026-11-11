@@ -22,6 +22,7 @@ import {
 } from '../db/schema.ts';
 import { seedCategories } from '../marketplace/catalog.ts';
 import { getProjectBySlug } from '../marketplace/projects.ts';
+import { IMAGE_MAX_BYTES } from '../media/images.ts';
 import { filePath } from '../uploads/receive.ts';
 import {
 	categoriesOf,
@@ -223,9 +224,9 @@ describe('mapping Modrinth onto the marketplace', () => {
 
 	it('fits summaries into 160 characters, cutting at a word', () => {
 		expect(summaryOf('  Short   and\nsweet. ')).toBe('Short and sweet.');
-		const long = summaryOf('word '.repeat(60));
-		expect(long.length).toBeLessThanOrEqual(160);
-		expect(long).toMatch(/word…$/);
+		expect(summaryOf('y'.repeat(160))).toBe('y'.repeat(160));
+		expect(summaryOf('word '.repeat(60))).toBe(`${'word '.repeat(30)}word…`);
+		expect(summaryOf(`a ${'x'.repeat(200)}`)).toBe('a…');
 		expect(summaryOf('x'.repeat(200))).toBe(`${'x'.repeat(159)}…`);
 	});
 
@@ -397,6 +398,7 @@ describe('importFromModrinth', () => {
 			published.map(({ version: v, file: f }) => ({
 				number: v.versionNumber,
 				name: v.name,
+				changelog: v.changelog,
 				date: v.publishedAt.toISOString(),
 				downloads: v.downloads,
 				loaders: v.loaders,
@@ -407,6 +409,7 @@ describe('importFromModrinth', () => {
 			{
 				number: '1.0.0',
 				name: 'Alpha Piscium v1.0.0',
+				changelog: '- Changes in 1.0.0',
 				date: '2025-10-10T00:00:00.000Z',
 				downloads: 100,
 				loaders: ['iris'],
@@ -416,6 +419,7 @@ describe('importFromModrinth', () => {
 			{
 				number: '1.1.0',
 				name: 'Alpha Piscium v1.1.0',
+				changelog: '- Changes in 1.1.0',
 				date: '2025-11-01T00:00:00.000Z',
 				downloads: 100,
 				loaders: ['iris'],
@@ -473,6 +477,18 @@ describe('importFromModrinth', () => {
 					files: [{ ...version('5', '', good).files[0]!, filename: 'pack.jar' }]
 				}),
 				served: good
+			},
+			{
+				// Only the SHA-1 Modrinth lists is wrong.
+				version: version('6', '2025-01-06T00:00:00Z', good, {
+					files: [
+						{
+							...version('6', '', good).files[0]!,
+							hashes: { ...hashes(good), sha1: '0'.repeat(40) }
+						}
+					]
+				}),
+				served: good
 			}
 		]);
 		const report = await importFromModrinth(ctx(), 'broken-pack', {
@@ -489,7 +505,8 @@ describe('importFromModrinth', () => {
 			],
 			['3', 'failed', 'Alpha Piscium v3.zip: The virus scanner found Eicar in this file.'],
 			['4', 'failed', 'None of its Minecraft versions are known here.'],
-			['5', 'failed', 'Shader packs must be .zip files.']
+			['5', 'failed', 'Shader packs must be .zip files.'],
+			['6', 'failed', 'Alpha Piscium v6.zip doesn’t match the hashes Modrinth lists.']
 		]);
 		expect(report.images.failed).toEqual([
 			`${CDN}/images/missing.webp (${CDN}/images/missing.webp answered 404.)`
@@ -517,7 +534,32 @@ describe('importFromModrinth', () => {
 			owner: 'Luna5ama'
 		});
 		expect(report).toMatchObject({ created: true, owner: 'Luna5ama' });
-		expect((await getProjectBySlug(db, 'shader', 'other-pack'))!.downloads).toBe(0);
+		const made = await getProjectBySlug(db, 'shader', 'other-pack');
+		// One version is enough to go public.
+		expect(made).toMatchObject({ status: 'approved', downloads: 0 });
+	});
+
+	it('makes an owner account even without a picture or bio', async () => {
+		const plain: ModrinthMember = {
+			role: 'Owner',
+			ordering: 0,
+			user: { username: 'Plain', bio: null, avatar_url: null, raw_avatar_url: null }
+		};
+		fake.serve(project('plain-pack'), [], [plain]);
+		const report = await importFromModrinth(ctx(), 'plain-pack', { versions: 1 });
+		expect(report.owner).toBe('Plain');
+		const [owner] = await db.select().from(users).where(eq(users.username, 'Plain'));
+		expect(owner).toMatchObject({ bio: '', avatarKey: null });
+	});
+
+	it('refuses to add versions to a project here that has no owner', async () => {
+		await db
+			.insert(projects)
+			.values({ id: 'orphan', slug: 'orphan-pack', type: 'shader', name: 'Orphan' });
+		fake.serve(project('orphan-pack'), []);
+		await expect(importFromModrinth(ctx(), 'orphan-pack', { versions: 1 })).rejects.toThrow(
+			'The project here has no owner to add versions as.'
+		);
 	});
 
 	it('needs an owner whose name works here', async () => {
@@ -546,14 +588,16 @@ describe('importFromModrinth', () => {
 	});
 
 	it('carries on without pictures it can’t have, and puts back a version’s files if one fails', async () => {
+		// Pictures that say they are over the limit aren't downloaded; one exactly at it is.
+		const sized = (url: string, length: number) =>
+			fake.routes.set(
+				url,
+				() => new Response(new Uint8Array(png), { headers: { 'content-length': String(length) } })
+			);
 		const huge = `${CDN}/images/huge.webp`;
-		fake.routes.set(
-			huge,
-			() =>
-				new Response(new Uint8Array(png), {
-					headers: { 'content-length': String(9 * 1024 * 1024) }
-				})
-		);
+		const edge = `${CDN}/images/edge.webp`;
+		sized(huge, IMAGE_MAX_BYTES + 1);
+		sized(edge, IMAGE_MAX_BYTES);
 		const shot = (url: string, ordering: number) => ({
 			url,
 			raw_url: null,
@@ -581,7 +625,7 @@ describe('importFromModrinth', () => {
 		fake.serve(
 			project('picky-pack', {
 				raw_icon_url: 'https://evil.example/icon.png',
-				gallery: [shot(`${CDN}/images/a.webp`, 1), shot(huge, 2)]
+				gallery: [shot(`${CDN}/images/a.webp`, 1), shot(huge, 2), shot(edge, 3)]
 			}),
 			[
 				two('1', '2025-01-01T00:00:00Z', extra, good),
@@ -603,8 +647,15 @@ describe('importFromModrinth', () => {
 		]);
 		const row = await getProjectBySlug(db, 'shader', 'picky-pack');
 		expect(row!.iconKey).toBeNull();
-		const shots = await db.select().from(gallery).where(eq(gallery.projectId, row!.id));
-		expect(shots.map((s) => [s.title, s.featured])).toEqual([['', true]]);
+		const shots = await db
+			.select()
+			.from(gallery)
+			.where(eq(gallery.projectId, row!.id))
+			.orderBy(gallery.sortOrder);
+		expect(shots.map((s) => [s.title, s.featured])).toEqual([
+			['', true],
+			['', false]
+		]);
 		const kept = await db
 			.select({ filename: files.filename, primary: files.primary })
 			.from(files)

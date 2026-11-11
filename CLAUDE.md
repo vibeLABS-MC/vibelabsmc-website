@@ -18,7 +18,8 @@ here through `/api/session`.
 - `develop.vibelabsmc.org` runs `develop` for real on the team's server (`deploy/preview.sh`). It
   is the live preview: real accounts, real uploads, real moderation, `noindex`. To import a
   Modrinth project there, run the bundled tool as the site's user, from the current release:
-  `cd /opt/vibelabs-web/current && runuser -u vibelabs-web -- /opt/vibelabs-web/bun/bun --env-file=/etc/vibelabs-web/web.env build/tools/import-modrinth.js <slug>`.
+  `cd /opt/vibelabs-web/current && umask 0027 && nice -n 10 ionice -c3 runuser -u vibelabs-web -- /opt/vibelabs-web/bun/bun --env-file=/etc/vibelabs-web/web.env build/tools/import-modrinth.js <slug>`
+  (umask 0027 matches the service, so files stay readable only by it and nginx).
 - Launching = moving vibelabsmc.org from GitHub Pages to the server (DNS + nginx + `ORIGIN`) and
   merging `develop` into `main`. `.github/workflows/pages.yml` still deploys `main` to Pages: it
   must change at launch, because the app needs a server.

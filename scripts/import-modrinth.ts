@@ -8,13 +8,14 @@
  * Locally it uses .env (and Node, for PGlite). On the server, `bun run build` bundles it into
  * build/tools, and it runs as the website's own user with the website's settings:
  *
- *   cd /opt/vibelabs-web/current && runuser -u vibelabs-web -- /opt/vibelabs-web/bun/bun \
+ *   cd /opt/vibelabs-web/current && umask 0027 && nice -n 10 ionice -c3 \
+ *     runuser -u vibelabs-web -- /opt/vibelabs-web/bun/bun \
  *     --env-file=/etc/vibelabs-web/web.env build/tools/import-modrinth.js <slug> ...
  */
 import { parseArgs } from 'node:util';
 import { parseConfig } from '../src/lib/server/config.ts';
 import { openDatabase } from '../src/lib/server/db/index.ts';
-import { importFromModrinth } from '../src/lib/server/import/modrinth.ts';
+import { importFromModrinth, MODRINTH_API } from '../src/lib/server/import/modrinth.ts';
 
 const USAGE =
 	'usage: import-modrinth <slug> [--versions 10|all] [--owner <username>] [--keep-downloads]';
@@ -43,6 +44,7 @@ try {
 			storageDir: config.storageDir,
 			clamd: config.clamd,
 			http: fetch,
+			api: MODRINTH_API,
 			log: (line) => console.log(line)
 		},
 		slug,

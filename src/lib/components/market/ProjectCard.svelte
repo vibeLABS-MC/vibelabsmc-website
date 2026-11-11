@@ -10,7 +10,7 @@
 		type ProjectType
 	} from '#lib/marketplace/taxonomy.ts';
 	import { fits, type Setup } from '#lib/marketplace/setup.ts';
-	import { newestVersion } from '#lib/marketplace/versions.ts';
+	import { versionSpan } from '#lib/marketplace/versions.ts';
 
 	interface Card {
 		slug: string;
@@ -48,7 +48,7 @@
 	const href = $derived(projectPath(project.type, project.slug));
 	const rating = $derived(project.ratingCount ? project.ratingSum / project.ratingCount : 0);
 	const fit = $derived(fits(setup, project, info.loaders.length > 0));
-	const newest = $derived(newestVersion(project.gameVersions));
+	const span = $derived(versionSpan(project.gameVersions));
 	const tags = $derived(project.categories.slice(0, 3).map((c) => categoryNames[c] ?? c));
 </script>
 
@@ -93,8 +93,7 @@
 			{#each project.loaders as loader (loader)}<span class="badge accent"
 					>{LOADER_NAMES[loader as Loader] ?? loader}</span
 				>{/each}
-			{#if newest}<span class="badge">{newest}{project.gameVersions.length > 1 ? '+' : ''}</span
-				>{/if}
+			{#if span}<span class="badge">{span}</span>{/if}
 			{#each tags as tag (tag)}<span class="badge">{tag}</span>{/each}
 			{#if view === 'list' && fit === 'yes'}<span class="badge ok"
 					><CircleCheck aria-hidden="true" />Fits your setup</span

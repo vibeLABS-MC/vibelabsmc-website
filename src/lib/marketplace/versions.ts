@@ -16,7 +16,7 @@ export function compareVersions(a: string, b: string): number {
 	const pb = releaseParts(b);
 	if (!pa || !pb) return Number(!pa) - Number(!pb);
 	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-		const diff = (pb[i] ?? 0) - (pa[i] ?? 0);
+		const diff = (pb[i] || 0) - (pa[i] || 0);
 		if (diff) return diff;
 	}
 	return 0;
@@ -49,6 +49,13 @@ export function summariseVersions(selected: string[], known: string[]): string {
 	return parts.join(', ');
 }
 
-/** The newest version in a list, or null. */
-export const newestVersion = (versions: string[]): string | null =>
-	[...versions].filter(isRelease).sort(compareVersions)[0] ?? versions[0] ?? null;
+/**
+ * A label short enough for a card: the oldest and newest release ("1.20.5–26.3"), the one
+ * version, or null. A list of only snapshots shows its first.
+ */
+export function versionSpan(versions: string[]): string | null {
+	const releases = versions.filter(isRelease).sort(compareVersions);
+	if (!releases.length) return versions[0] ?? null;
+	const [newest, oldest] = [releases[0]!, releases[releases.length - 1]!];
+	return newest === oldest ? newest : `${oldest}–${newest}`;
+}

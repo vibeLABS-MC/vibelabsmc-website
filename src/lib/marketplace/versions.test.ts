@@ -3,7 +3,7 @@ import {
 	compareVersions,
 	isRelease,
 	majorOf,
-	newestVersion,
+	versionSpan,
 	releaseParts,
 	summariseVersions
 } from './versions.ts';
@@ -44,13 +44,17 @@ describe('release numbers', () => {
 			'25w02a'
 		]);
 		expect(compareVersions('1.21', '1.21.0')).toBe(0);
+		// A missing part counts as 0, from either side.
+		expect(compareVersions('1.21', '1.21.1')).toBeGreaterThan(0);
+		expect(compareVersions('1.21.1', '1.21')).toBeLessThan(0);
 		expect(compareVersions('a', 'b')).toBe(0);
 	});
 
-	it('finds the newest supported version', () => {
-		expect(newestVersion(['1.20.1', '1.21.4', '1.21'])).toBe('1.21.4');
-		expect(newestVersion(['25w02a'])).toBe('25w02a');
-		expect(newestVersion([])).toBeNull();
+	it('labels a list by its oldest and newest release', () => {
+		expect(versionSpan(['1.21', '26.3', '1.20.5', '1.21.4'])).toBe('1.20.5–26.3');
+		expect(versionSpan(['1.21.4', '25w02a'])).toBe('1.21.4');
+		expect(versionSpan(['25w02a', '25w03a'])).toBe('25w02a');
+		expect(versionSpan([])).toBeNull();
 	});
 });
 

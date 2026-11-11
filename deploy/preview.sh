@@ -13,7 +13,7 @@ ARCHIVE="/tmp/vibelabs-web-$RELEASE.tgz"
 
 bun run build
 tar -czf "$ARCHIVE" build drizzle package.json bun.lock
-scp -q "$ARCHIVE" deploy/server/nginx-develop.conf "$HOST:/tmp/"
+scp -q "$ARCHIVE" deploy/server/nginx-develop.conf deploy/server/vibelabs-web.service "$HOST:/tmp/"
 rm -f "$ARCHIVE"
 
 ssh "$HOST" "RELEASE=$RELEASE bash -s" <<'REMOTE'
@@ -33,6 +33,14 @@ cd "$DIR"
 HOME=/root BUN_INSTALL_CACHE_DIR=/var/cache/vibelabs-web-bun /opt/vibelabs-web/bun/bun install --production --frozen-lockfile --silent
 chown -R root:root "$DIR"
 chmod -R go-w "$DIR"
+
+# The service definition travels with the code; install it when it changed.
+if ! cmp -s /tmp/vibelabs-web.service /etc/systemd/system/vibelabs-web.service; then
+	install -m 0644 /tmp/vibelabs-web.service /etc/systemd/system/vibelabs-web.service
+	systemctl daemon-reload
+	echo "service definition updated"
+fi
+rm -f /tmp/vibelabs-web.service
 
 ln -sfn "$DIR" /opt/vibelabs-web/current.new
 mv -T /opt/vibelabs-web/current.new /opt/vibelabs-web/current

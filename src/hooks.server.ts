@@ -11,7 +11,11 @@ import { applyHeaders, securityHeaders } from '#lib/server/security/headers.ts';
 
 /** Fails the start-up, not the first request, when the configuration is incomplete. */
 export const init: ServerInit = async () => {
-	if (!building) await startJobs(await runtime());
+	if (building) return;
+	const rt = await runtime();
+	await startJobs(rt);
+	// adapter-node emits this after it stops taking requests: close the pool so the process ends.
+	process.once('sveltekit:shutdown', () => void rt.close());
 };
 
 /** Only the upload endpoint takes big bodies; everything else stops at 10 MB before reading. */

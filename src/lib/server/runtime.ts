@@ -16,6 +16,8 @@ export interface Runtime {
 	limiter: RateLimiter;
 	mailer: Mailer;
 	keys: { ip: Buffer; totp: Buffer };
+	/** Closes the database, so the process can exit when the server shuts down. */
+	close: () => Promise<void>;
 }
 
 let starting: Promise<Runtime> | undefined;
@@ -32,13 +34,14 @@ export function runtime(): Promise<Runtime> {
 			}
 		}
 		const config = parseConfig(process.env);
-		const { db } = await openDatabase(config.databaseUrl, config.databasePool);
+		const { db, close } = await openDatabase(config.databaseUrl, config.databasePool);
 		return {
 			config,
 			db,
 			limiter: new RateLimiter(),
 			mailer: createMailer(config),
-			keys: { ip: deriveKey(config.secret, 'ip-hash'), totp: deriveKey(config.secret, 'totp') }
+			keys: { ip: deriveKey(config.secret, 'ip-hash'), totp: deriveKey(config.secret, 'totp') },
+			close
 		};
 	})();
 	return starting;

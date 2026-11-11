@@ -102,7 +102,11 @@
 				>
 			</form>
 		{:else}
-			<p class="alert warn">Email sign-up isn’t available yet. Use GitHub or Discord.</p>
+			<p class="alert warn">
+				{data.providers.length
+					? 'Email sign-up isn’t available yet. Use GitHub or Discord.'
+					: 'Creating accounts isn’t switched on yet on this server. Please check back soon.'}
+			</p>
 		{/if}
 
 		{#snippet footer()}

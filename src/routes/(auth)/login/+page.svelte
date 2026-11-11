@@ -23,6 +23,12 @@
 		<p class="alert error" role="alert"><CircleAlert aria-hidden="true" />{data.error}</p>
 	{/if}
 
+	{#if !data.providers.length && !data.emailEnabled}
+		<p class="alert warn" role="status">
+			<CircleAlert aria-hidden="true" />Signing in isn’t switched on yet on this server. Please
+			check back soon.
+		</p>
+	{/if}
 	<ProviderButtons providers={data.providers} next={data.next} />
 
 	{#if data.emailEnabled}

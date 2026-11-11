@@ -26,6 +26,7 @@ PGlite (Postgres in WASM) inside the dev server.
 cp .env.example .env     # set APP_SECRET as the file explains
 bun install
 bun run seed:demo        # optional sample projects
+bun run import:modrinth alpha-piscium --versions 2   # optional: a real project from Modrinth
 bun run dev              # http://localhost:5173
 ```
 

@@ -37,11 +37,14 @@ export type RuleName = keyof typeof RULES;
 
 export class RateLimiter {
 	private readonly buckets = new Map<string, { count: number; resetAt: number }>();
+	private readonly now: () => number;
+	private readonly maxKeys: number;
 
-	constructor(
-		private readonly now: () => number = Date.now,
-		private readonly maxKeys = 100_000
-	) {}
+	// Plain fields rather than parameter properties, so Node can run this file as it is.
+	constructor(now: () => number = Date.now, maxKeys = 100_000) {
+		this.now = now;
+		this.maxKeys = maxKeys;
+	}
 
 	hit(key: string, rule: Rule): Verdict {
 		const time = this.now();

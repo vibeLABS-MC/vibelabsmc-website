@@ -5,7 +5,7 @@
 import { firstOrNull } from '../db/query.ts';
 import { RateLimiter } from '../security/rate-limit.ts';
 import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
-import { rm } from 'node:fs/promises';
+import { rename, rm } from 'node:fs/promises';
 import type { Database } from '../db/index.ts';
 import {
 	dependencies,
@@ -17,7 +17,8 @@ import {
 	versions
 } from '../db/schema.ts';
 import { newId } from '../security/crypto.ts';
-import { keep, stagedPath } from '../uploads/receive.ts';
+import { keep, stagedPath, type Received } from '../uploads/receive.ts';
+import type { Inspection } from '../uploads/inspect.ts';
 import { notify } from '../community/notifications.ts';
 import type { Loader } from '../../marketplace/taxonomy.ts';
 import { refreshProjectCache, type MemberRole, type Project } from './projects.ts';
@@ -34,6 +35,34 @@ export async function stageFile(
 ): Promise<Staged> {
 	const [row] = await db.insert(stagedFiles).values(input).returning();
 	return row!;
+}
+
+/** Moves a checked upload into the staging area and records it, ready to go into a version. */
+export async function stageReceived(
+	db: Database,
+	storageDir: string,
+	input: {
+		userId: string;
+		projectId: string;
+		filename: string;
+		received: Received;
+		inspection: Inspection;
+	}
+): Promise<Staged> {
+	const id = newId(16);
+	await rename(input.received.path, stagedPath(storageDir, id));
+	return stageFile(db, {
+		id,
+		userId: input.userId,
+		projectId: input.projectId,
+		filename: input.filename,
+		size: input.received.size,
+		sha1: input.received.sha1,
+		sha512: input.received.sha512,
+		scanStatus: input.inspection.scan.status,
+		scanDetail: input.inspection.scan.detail,
+		detected: input.inspection.detected
+	});
 }
 
 export async function listStaged(

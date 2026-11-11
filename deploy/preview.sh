@@ -13,8 +13,13 @@ ARCHIVE="/tmp/vibelabs-web-$RELEASE.tgz"
 
 bun run build
 tar -czf "$ARCHIVE" build drizzle package.json bun.lock
-scp -q "$ARCHIVE" deploy/server/nginx-develop.conf deploy/server/vibelabs-web.service "$HOST:/tmp/"
+scp -q "$ARCHIVE" deploy/server/nginx-develop.conf "$HOST:/tmp/"
 rm -f "$ARCHIVE"
+# The server's own pieces (services, timer, helper scripts) travel with the code.
+ssh "$HOST" 'rm -rf /tmp/vibelabs-web-deploy && install -d -m 0700 /tmp/vibelabs-web-deploy'
+scp -q deploy/server/vibelabs-web.service deploy/server/vibelabs-web-backup.service \
+	deploy/server/vibelabs-web-backup.timer deploy/server/backup deploy/server/set-env \
+	"$HOST:/tmp/vibelabs-web-deploy/"
 
 ssh "$HOST" "RELEASE=$RELEASE bash -s" <<'REMOTE'
 set -euo pipefail
@@ -34,13 +39,22 @@ HOME=/root BUN_INSTALL_CACHE_DIR=/var/cache/vibelabs-web-bun /opt/vibelabs-web/b
 chown -R root:root "$DIR"
 chmod -R go-w "$DIR"
 
-# The service definition travels with the code; install it when it changed.
-if ! cmp -s /tmp/vibelabs-web.service /etc/systemd/system/vibelabs-web.service; then
-	install -m 0644 /tmp/vibelabs-web.service /etc/systemd/system/vibelabs-web.service
+# Install each of the server's own pieces that changed (only ours: vibelabs-web*).
+install_changed() { # name target mode
+	if cmp -s "/tmp/vibelabs-web-deploy/$1" "$2"; then return 1; fi
+	install -m "$3" "/tmp/vibelabs-web-deploy/$1" "$2"
+	echo "updated $2"
+}
+units_changed=no
+for unit in vibelabs-web.service vibelabs-web-backup.service vibelabs-web-backup.timer; do
+	if install_changed "$unit" "/etc/systemd/system/$unit" 0644; then units_changed=yes; fi
+done
+for helper in backup set-env; do install_changed "$helper" "/opt/vibelabs-web/bin/$helper" 0755 || true; done
+if [ "$units_changed" = yes ]; then
 	systemctl daemon-reload
-	echo "service definition updated"
+	systemctl try-restart vibelabs-web-backup.timer
 fi
-rm -f /tmp/vibelabs-web.service
+rm -rf /tmp/vibelabs-web-deploy
 
 ln -sfn "$DIR" /opt/vibelabs-web/current.new
 mv -T /opt/vibelabs-web/current.new /opt/vibelabs-web/current

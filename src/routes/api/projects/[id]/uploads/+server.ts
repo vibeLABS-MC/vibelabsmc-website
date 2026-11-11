@@ -5,17 +5,14 @@ import { notify } from '#lib/server/community/notifications.ts';
 import { users } from '#lib/server/db/schema.ts';
 import { limitRequest } from '#lib/server/http.ts';
 import { getProject, memberRole } from '#lib/server/marketplace/projects.ts';
-import { stageFile } from '#lib/server/marketplace/releases.ts';
+import { stageReceived } from '#lib/server/marketplace/releases.ts';
 import { extensionProblem, inspectUpload } from '#lib/server/uploads/inspect.ts';
 import {
 	cleanFilename,
 	FILE_MAX_BYTES,
 	receive,
-	stagedPath,
 	UploadError
 } from '#lib/server/uploads/receive.ts';
-import { rename } from 'node:fs/promises';
-import { newId } from '#lib/server/security/crypto.ts';
 import type { RequestHandler } from './$types';
 
 /**
@@ -76,19 +73,12 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		error(422, inspection.problems.join(' '));
 	}
 
-	const id = newId(16);
-	await rename(received.path, stagedPath(locals.config.storageDir, id));
-	const staged = await stageFile(locals.db, {
-		id,
+	const staged = await stageReceived(locals.db, locals.config.storageDir, {
 		userId: user.id,
 		projectId: project.id,
 		filename,
-		size: received.size,
-		sha1: received.sha1,
-		sha512: received.sha512,
-		scanStatus: inspection.scan.status,
-		scanDetail: inspection.scan.detail,
-		detected: inspection.detected
+		received,
+		inspection
 	});
 	return json({
 		id: staged.id,

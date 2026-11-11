@@ -2,9 +2,21 @@
 # Nightly backup of the vibeLABS website: the database (pg_dump, peer authentication as the
 # app's own user) and the uploaded files and images. Keeps 14 days. Run by
 # vibelabs-web-backup.timer as the vibelabs-web user.
+#
+# Files and images never change once stored (they are named by their hash), so each day's copy
+# is a full snapshot whose unchanged files are hard links into the day before: every snapshot
+# is complete, but only new files take up space. (A tarball a night would keep 14 full copies.)
 set -eu
 DIR=/var/backups/vibelabs-web
 DAY=$(date +%F)
+SNAPSHOT="$DIR/data-$DAY"
+
 pg_dump --format=custom --no-owner --dbname=vibelabs_web --host=/var/run/postgresql --file="$DIR/db-$DAY.dump"
-tar --create --gzip --file="$DIR/data-$DAY.tar.gz" --directory=/var/lib/vibelabs-web files images
-find "$DIR" -type f -mtime +14 -delete
+
+PREVIOUS=$(find "$DIR" -mindepth 1 -maxdepth 1 -type d -name 'data-*' ! -name "data-$DAY" | sort | tail -n 1)
+rsync --archive --delete ${PREVIOUS:+--link-dest="$PREVIOUS"} \
+	/var/lib/vibelabs-web/files /var/lib/vibelabs-web/images "$SNAPSHOT/"
+touch "$SNAPSHOT"
+
+find "$DIR" -mindepth 1 -maxdepth 1 -type f -name 'db-*.dump' -mtime +14 -delete
+find "$DIR" -mindepth 1 -maxdepth 1 -type d -name 'data-*' -mtime +14 -exec rm -rf {} +

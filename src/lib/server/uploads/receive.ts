@@ -51,7 +51,9 @@ export async function receive(
 		if (size === 0) throw new UploadError('The file is empty.');
 		return { path, size, sha1: sha1.digest('hex'), sha512: sha512.digest('hex') };
 	} catch (cause) {
+		// Let the file close before deleting it (Windows keeps an open file listed until then).
 		out.destroy();
+		if (!out.closed) await new Promise((resolve) => out.once('close', resolve));
 		await rm(path, { force: true });
 		throw cause;
 	}

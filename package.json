@@ -9,7 +9,8 @@
 	},
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "vite build && bun run build:tools",
+		"build:tools": "bun build scripts/import-modrinth.ts --target=bun --packages=external --outdir=build/tools",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo \"\"",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -22,6 +23,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "bun scripts/migrate.ts",
 		"seed:demo": "node scripts/seed-demo.ts",
+		"import:modrinth": "node --env-file-if-exists=.env scripts/import-modrinth.ts",
 		"preview:app": "node --env-file=.env build/index.js"
 	},
 	"devDependencies": {

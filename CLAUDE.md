@@ -16,7 +16,9 @@ here through `/api/session`.
 - Branch from `develop` and open pull requests **into `develop`**.
 - **Never push to `main`** unless the team has explicitly decided to launch.
 - `develop.vibelabsmc.org` runs `develop` for real on the team's server (`deploy/preview.sh`). It
-  is the live preview: real accounts, real uploads, real moderation, `noindex`.
+  is the live preview: real accounts, real uploads, real moderation, `noindex`. To import a
+  Modrinth project there, run the bundled tool as the site's user, from the current release:
+  `cd /opt/vibelabs-web/current && runuser -u vibelabs-web -- /opt/vibelabs-web/bun/bun --env-file=/etc/vibelabs-web/web.env build/tools/import-modrinth.js <slug>`.
 - Launching = moving vibelabsmc.org from GitHub Pages to the server (DNS + nginx + `ORIGIN`) and
   merging `develop` into `main`. `.github/workflows/pages.yml` still deploys `main` to Pages: it
   must change at launch, because the app needs a server.
@@ -31,6 +33,8 @@ cp .env.example .env   # then set APP_SECRET (the file explains how)
 bun install
 bun run dev            # http://localhost:5173, database in .data/pglite (no install needed)
 bun run seed:demo      # optional: sample projects in the local database
+bun run import:modrinth <slug> [--versions 10|all] [--owner <user>] [--keep-downloads]
+                       # copy a Modrinth project in (page, pictures, versions; files scanned)
 bun run test           # unit tests (Vitest, project "unit"), each file gets a fresh database
 bun run check          # svelte-check: Svelte + TypeScript types
 bun run lint           # Prettier check (bun run format to fix)
@@ -72,6 +76,7 @@ src/lib/server/marketplace/    projects, versions + files, search, gallery, mark
 src/lib/server/uploads/        streaming receive, zip inspection, ClamAV client, scan strategy
 src/lib/server/community/      follows, reviews, collections, reports, notifications
 src/lib/server/admin/          moderation decisions, file verdicts, users, audit reading
+src/lib/server/import/         Modrinth importer: same receive, check and scan path as uploads
 src/lib/marketplace/           browser-safe: taxonomy, search URLs, versions, setup, matrix
 src/routes/(site)/             pages with the site header: landing, marketplace, dashboard,
                                settings, admin, profiles, collections, legal
@@ -79,6 +84,7 @@ src/routes/(auth)/             sign-in pages: login, signup, 2FA, confirm, onboa
 src/routes/auth/[provider]/    OAuth start and callback
 src/routes/api/                uploads, session (for the docs), markdown preview, v1 search
 tests/site/                    end-to-end tests with fake GitHub, Discord, HIBP, Mojang, ClamAV
+scripts/                       migrate, seed-demo, import-modrinth (bundled into build/tools)
 deploy/                        server set-up, deploy and secret scripts
 ```
 
@@ -96,7 +102,8 @@ deploy/                        server set-up, deploy and secret scripts
 - **Never trust user Markdown**: render with `renderMarkdown()` (server-side, allowlist, gallery
   images only). Links in forms go through `linkProblem()`.
 - **Uploads** go through `/api/projects/[id]/uploads` only: streamed, size-capped, layout-checked,
-  ClamAV-scanned. Downloads go through `/download/...` (access check, counting, `sandbox` CSP,
+  ClamAV-scanned. The Modrinth importer is the one other way in, and uses the same `receive`,
+  `inspectUpload` and `stageReceived` (plus a check against Modrinth's hashes). Downloads go through `/download/...` (access check, counting, `sandbox` CSP,
   attachment). Images are always re-encoded.
 - **Messages from query strings** are picked by code (`?error=cancelled`), never echoed.
 - Rate limits are listed in `src/lib/server/security/rate-limit.ts`. Every staff action and
